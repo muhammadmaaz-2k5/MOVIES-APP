@@ -334,7 +334,6 @@ class _MovieTvShowDetailScreenState extends State<MovieTvShowDetailScreen> {
                               textAlign: TextAlign.center,
                             ),
                           ),
-                          // Tagline
                           if ((item['tagline'] as String?)?.isNotEmpty == true)
                             Padding(
                               padding: const EdgeInsets.fromLTRB(20, 6, 20, 0),

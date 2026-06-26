@@ -1,5 +1,6 @@
 import 'dart:ui';
 
+import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/app_export.dart';
@@ -7,14 +8,34 @@ import '../search_screen/filter_sheet.dart';
 import '../search_screen/search_filters.dart';
 import './widgets/featured_banner_widget.dart';
 import './widgets/filter_chips_widget.dart';
-import './widgets/genre_chip_row_widget.dart';
 import './widgets/movie_grid_card_widget.dart';
 import './widgets/home_sections_widget.dart';
 import './widgets/section_header_widget.dart';
-import './widgets/top_rated_row_widget.dart';
 import './widgets/trending_card_widget.dart';
 
-// TODO: Replace with [Riverpod/Bloc] for production — TMDB API integration
+// ─── Category definition ──────────────────────────────────────────────────────
+
+class _Category {
+  final String label;
+  final String emoji;
+  // TMDB discover params for trending row
+  final Map<String, dynamic> trendingParams;
+  // TMDB discover params for popular grid
+  final Map<String, dynamic> popularParams;
+  // media type: 'movie' | 'tv' | 'all'
+  final String mediaType;
+
+  const _Category({
+    required this.label,
+    required this.emoji,
+    required this.trendingParams,
+    required this.popularParams,
+    this.mediaType = 'movie',
+  });
+}
+
+// ─── Home screen ─────────────────────────────────────────────────────────────
+
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
 
@@ -23,395 +44,254 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
-  int _selectedFilter = 0;
   final ScrollController _scrollController = ScrollController();
   bool _isAppBarBlurred = false;
   SearchFilters _activeFilters = const SearchFilters();
 
-  // TODO: Replace with TMDB API call — GET /trending/all/week
-  // Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
-  static final List<Map<String, dynamic>> _featuredMaps = [
-    {
-      'id': 1,
-      'title': 'Dune: Part Two',
-      'type': 'movie',
-      'backdropUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_15af53f71-1772813364588.png',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_15af53f71-1772813364588.png',
-      'rating': 8.5,
-      'year': '2024',
-      'genres': ['Sci-Fi', 'Adventure'],
-      'runtime': '166 min',
-      'overview':
-          'Paul Atreides unites with the Fremen while on a warpath of revenge against the conspirators who destroyed his family.',
-      'voteCount': 4821,
-      'backdropSemanticLabel':
-          'Vast desert landscape with dramatic lighting, representing the sci-fi world of Dune',
-      'posterSemanticLabel':
-          'Movie poster for Dune Part Two featuring desert warrior silhouette',
-    },
-    {
-      'id': 2,
-      'title': 'Shogun',
-      'type': 'tv',
-      'backdropUrl':
-          'https://images.unsplash.com/photo-1708527731834-419bf5fe1d5b',
-      'posterUrl':
-          'https://images.unsplash.com/photo-1708527731834-419bf5fe1d5b',
-      'rating': 9.0,
-      'year': '2024',
-      'genres': ['Drama', 'History'],
-      'runtime': '10 Episodes',
-      'overview':
-          'A shipwrecked English navigator becomes a pivotal player in a brutal struggle for power in feudal Japan.',
-      'voteCount': 3214,
-      'backdropSemanticLabel':
-          'Misty Japanese landscape with traditional architecture suggesting feudal era',
-      'posterSemanticLabel':
-          'TV show poster for Shogun featuring samurai in traditional armor',
-    },
-    {
-      'id': 3,
-      'title': 'Oppenheimer',
-      'type': 'movie',
-      'backdropUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_122a0ff3c-1782334248803.png',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_122a0ff3c-1782334248803.png',
-      'rating': 8.9,
-      'year': '2023',
-      'genres': ['Drama', 'History', 'Biography'],
-      'runtime': '180 min',
-      'overview':
-          'The story of American scientist J. Robert Oppenheimer and his role in the development of the atomic bomb.',
-      'voteCount': 12450,
-      'backdropSemanticLabel':
-          'Dramatic sky with explosive light suggesting the atomic age',
-      'posterSemanticLabel':
-          'Oppenheimer movie poster with silhouette of man in hat against explosive sky',
-    },
+  static const String _tmdbBase = 'https://api.themoviedb.org/3';
+  static const String _imageBase = 'https://image.tmdb.org/t/p';
+  static const String _bearerToken =
+      'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1YmM0ZDAzZGU2MzY1YTBlZWY3ZDBhNGM0YTdkMDAyYiIsIm5iZiI6MTc1NTg2NzY0NS40ODg5OTk4LCJzdWIiOiI2OGE4NjlmZGI0NWEzOGEyNWMyNjEzYWEiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0._zPoKSHku3D5XAsfQ-L46MTKvJTs6cOB07Ij386z4OA';
+
+  late final Dio _dio;
+
+  // Categories — each fetches its own TMDB data
+  static const List<_Category> _categories = [
+    _Category(
+      label: 'All',
+      emoji: '🎬',
+      mediaType: 'all',
+      trendingParams: {},               // uses /trending/all/week
+      popularParams: {'sort_by': 'popularity.desc', 'include_adult': false},
+    ),
+    _Category(
+      label: 'Punjabi',
+      emoji: '🎵',
+      mediaType: 'movie',
+      trendingParams: {'with_original_language': 'pa', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'pa', 'sort_by': 'popularity.desc', 'include_adult': false},
+    ),
+    _Category(
+      label: 'Hollywood',
+      emoji: '⭐',
+      mediaType: 'movie',
+      trendingParams: {'with_original_language': 'en', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'en', 'sort_by': 'popularity.desc', 'include_adult': false},
+    ),
+    _Category(
+      label: 'Bollywood',
+      emoji: '💃',
+      mediaType: 'movie',
+      trendingParams: {'with_original_language': 'hi', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'hi', 'sort_by': 'popularity.desc', 'include_adult': false},
+    ),
+    _Category(
+      label: 'KDrama',
+      emoji: '🎭',
+      mediaType: 'tv',
+      trendingParams: {'with_original_language': 'ko', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'ko', 'sort_by': 'popularity.desc', 'include_adult': false},
+    ),
   ];
 
-  static final List<Map<String, dynamic>> _trendingMaps = [
-    {
-      'id': 10,
-      'title': 'The Bear',
-      'type': 'tv',
-      'posterUrl':
-          'https://images.unsplash.com/photo-1656478708298-e4d5e138bf11',
-      'rating': 8.7,
-      'year': '2024',
-      'genres': ['Drama', 'Comedy'],
-      'runtime': '8 Episodes',
-      'overview':
-          'A young chef from the fine-dining world returns to Chicago to run his family sandwich shop.',
-      'voteCount': 2890,
-      'posterSemanticLabel':
-          'TV show poster featuring a professional kitchen environment with dramatic lighting',
-    },
-    {
-      'id': 11,
-      'title': 'Poor Things',
-      'type': 'movie',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_1f0b094f2-1771890357295.png',
-      'rating': 8.0,
-      'year': '2023',
-      'genres': ['Comedy', 'Drama', 'Fantasy'],
-      'runtime': '141 min',
-      'overview':
-          'The incredible tale about the fantastical evolution of Bella Baxter, a young woman brought back to life.',
-      'voteCount': 5670,
-      'posterSemanticLabel':
-          'Whimsical movie poster with surreal Victorian-era aesthetic',
-    },
-    {
-      'id': 12,
-      'title': 'Fallout',
-      'type': 'tv',
-      'posterUrl':
-          'https://images.unsplash.com/photo-1661366721768-e2e2e27cf50a',
-      'rating': 8.5,
-      'year': '2024',
-      'genres': ['Sci-Fi', 'Action', 'Drama'],
-      'runtime': '8 Episodes',
-      'overview':
-          'In a future, post-apocalyptic Los Angeles, a young woman emerges from her vault into the wasteland.',
-      'voteCount': 3120,
-      'posterSemanticLabel':
-          'Post-apocalyptic wasteland scene with desolate urban environment',
-    },
-    {
-      'id': 13,
-      'title': 'Civil War',
-      'type': 'movie',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_1ed8be91f-1777395428211.png',
-      'rating': 7.4,
-      'year': '2024',
-      'genres': ['Action', 'Drama', 'War'],
-      'runtime': '109 min',
-      'overview':
-          'A team of military-embedded journalists race against time to reach D.C. before rebel factions descend.',
-      'voteCount': 1980,
-      'posterSemanticLabel':
-          'War journalism themed movie poster with tense dramatic imagery',
-    },
-    {
-      'id': 14,
-      'title': 'Baby Reindeer',
-      'type': 'tv',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_14e45a2ba-1772758782914.png',
-      'rating': 8.6,
-      'year': '2024',
-      'genres': ['Drama', 'Thriller'],
-      'runtime': '7 Episodes',
-      'overview':
-          'A struggling comedian becomes the obsession of a stalker, forcing him to confront uncomfortable truths.',
-      'voteCount': 4230,
-      'posterSemanticLabel':
-          'Psychological thriller TV show poster with lone figure in dark urban setting',
-    },
-    {
-      'id': 15,
-      'title': 'Challengers',
-      'type': 'movie',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_1a3085a0a-1773862793944.png',
-      'rating': 7.8,
-      'year': '2024',
-      'genres': ['Drama', 'Romance', 'Sport'],
-      'runtime': '131 min',
-      'overview':
-          'Three players who knew each other when they were teenagers reconnect at a tennis tournament.',
-      'voteCount': 2340,
-      'posterSemanticLabel':
-          'Tennis drama movie poster with athletic figures and competitive intensity',
-    },
-  ];
-
-  static final List<Map<String, dynamic>> _popularMaps = [
-    {
-      'id': 20,
-      'title': 'Inception',
-      'type': 'movie',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_1ea57370e-1772239655078.png',
-      'rating': 8.8,
-      'year': '2010',
-      'genres': ['Sci-Fi', 'Action', 'Thriller'],
-      'runtime': '148 min',
-      'overview':
-          'A thief who steals corporate secrets through dream-sharing technology is given the inverse task of planting an idea.',
-      'voteCount': 34567,
-      'posterSemanticLabel':
-          'Surreal cityscape bending in impossible ways for Inception movie poster',
-    },
-    {
-      'id': 21,
-      'title': 'The Last of Us',
-      'type': 'tv',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_14b28fd37-1772897587194.png',
-      'rating': 8.8,
-      'year': '2023',
-      'genres': ['Drama', 'Action', 'Sci-Fi'],
-      'runtime': '9 Episodes',
-      'overview':
-          'After a global catastrophe, a hardened survivor and a teenage girl must traverse a dangerous post-pandemic America.',
-      'voteCount': 8920,
-      'posterSemanticLabel':
-          'Post-apocalyptic drama TV poster showing overgrown urban landscape with survivors',
-    },
-    {
-      'id': 22,
-      'title': 'Parasite',
-      'type': 'movie',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_125bcebc8-1780257695672.png',
-      'rating': 8.5,
-      'year': '2019',
-      'genres': ['Thriller', 'Comedy', 'Drama'],
-      'runtime': '132 min',
-      'overview':
-          'A poor family schemes to become employed by a wealthy family, infiltrating their household one by one.',
-      'voteCount': 28900,
-      'posterSemanticLabel':
-          'Korean thriller movie poster with symbolic imagery of class divide',
-    },
-    {
-      'id': 23,
-      'title': 'Severance',
-      'type': 'tv',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_18f9990a5-1782334248416.png',
-      'rating': 8.7,
-      'year': '2022',
-      'genres': ['Sci-Fi', 'Thriller', 'Drama'],
-      'runtime': '9 Episodes',
-      'overview':
-          'Mark leads a team of office workers whose memories have been surgically divided between their work and personal lives.',
-      'voteCount': 5670,
-      'posterSemanticLabel':
-          'Corporate dystopia TV show poster with clinical office environment imagery',
-    },
-  ];
-
-  static final List<Map<String, dynamic>> _topRatedMaps = [
-    {
-      'id': 30,
-      'title': 'Breaking Bad',
-      'type': 'tv',
-      'posterUrl':
-          'https://images.pexels.com/photos/1089440/pexels-photo-1089440.jpeg?w=400',
-      'rating': 9.5,
-      'year': '2008–2013',
-      'genres': ['Drama', 'Crime', 'Thriller'],
-      'runtime': '62 Episodes',
-      'overview':
-          'A chemistry teacher diagnosed with cancer partners with a former student to secure his family\'s future.',
-      'voteCount': 89234,
-      'posterSemanticLabel':
-          'Iconic Breaking Bad TV show poster with desert landscape and chemistry imagery',
-    },
-    {
-      'id': 31,
-      'title': 'Interstellar',
-      'type': 'movie',
-      'posterUrl':
-          'https://images.unsplash.com/photo-1446776811953-b23d57bd21aa?w=400&q=80',
-      'rating': 8.7,
-      'year': '2014',
-      'genres': ['Sci-Fi', 'Drama', 'Adventure'],
-      'runtime': '169 min',
-      'overview':
-          'A team of explorers travel through a wormhole in space in an attempt to ensure humanity\'s survival.',
-      'voteCount': 41200,
-      'posterSemanticLabel':
-          'Space exploration movie poster showing spacecraft approaching a wormhole',
-    },
-    {
-      'id': 32,
-      'title': 'The Godfather',
-      'type': 'movie',
-      'posterUrl':
-          'https://img.rocket.new/generatedImages/rocket_gen_img_1d8217788-1772109803927.png',
-      'rating': 9.2,
-      'year': '1972',
-      'genres': ['Crime', 'Drama'],
-      'runtime': '175 min',
-      'overview':
-          'The aging patriarch of an organized crime dynasty transfers control of his clandestine empire to his reluctant son.',
-      'voteCount': 78900,
-      'posterSemanticLabel':
-          'Classic Godfather movie poster with shadowy figure in formal attire',
-    },
-  ];
-
-  static const List<String> _genreList = [
-    'Action',
-    'Comedy',
-    'Drama',
-    'Horror',
-    'Sci-Fi',
-    'Thriller',
-    'Romance',
-    'Animation',
-    'Documentary',
-    'Fantasy',
-  ];
-
-  static const List<String> _filterOptions = ['All', 'Movies', 'TV Shows'];
-  static const List<String> _categories = ['All', 'Punjabi', 'Hollywood', 'Bollywood'];
-
-  // Language tags per category (matched against item 'language' or 'genres')
-  static const Map<String, List<String>> _categoryLanguages = {
-    'Punjabi': ['pa', 'punjabi'],
-    'Hollywood': ['en', 'english'],
-    'Bollywood': ['hi', 'hindi'],
-  };
-
-  late List<Map<String, dynamic>> _featured;
-  late List<Map<String, dynamic>> _trending;
-  late List<Map<String, dynamic>> _popular;
-  late List<Map<String, dynamic>> _topRated;
   int _selectedCategory = 0;
+
+  // Per-category cached data: index → list
+  final Map<int, List<Map<String, dynamic>>> _trendingByCategory = {};
+  final Map<int, List<Map<String, dynamic>>> _popularByCategory  = {};
+  final Map<int, bool> _loadingTrending = {};
+  final Map<int, bool> _loadingPopular  = {};
+
+  // Featured banner uses the "All" trending (category 0)
+  List<Map<String, dynamic>> get _featured =>
+      (_trendingByCategory[0] ?? []).take(3).toList();
+
+  static String get _monthStart {
+    final now = DateTime.now();
+    return '${now.year}-${now.month.toString().padLeft(2, '0')}-01';
+  }
+
+  static String get _monthEnd {
+    final now = DateTime.now();
+    final last = DateTime(now.year, now.month + 1, 0);
+    return '${last.year}-${last.month.toString().padLeft(2, '0')}-${last.day.toString().padLeft(2, '0')}';
+  }
 
   @override
   void initState() {
     super.initState();
-    _featured = _featuredMaps;
-    _trending = _trendingMaps;
-    _popular = _popularMaps;
-    _topRated = _topRatedMaps;
-
+    _dio = Dio(BaseOptions(headers: {'Authorization': 'Bearer $_bearerToken'}));
     _scrollController.addListener(() {
       final shouldBlur = _scrollController.offset > 10;
       if (shouldBlur != _isAppBarBlurred) {
         setState(() => _isAppBarBlurred = shouldBlur);
       }
     });
+    // Pre-fetch All (index 0)
+    _fetchCategory(0);
   }
 
   @override
   void dispose() {
     _scrollController.dispose();
+    _dio.close();
     super.dispose();
   }
 
-  List<Map<String, dynamic>> _filteredList(List<Map<String, dynamic>> list) {
-    var result = list;
-    // Type filter (All / Movies / TV Shows)
-    if (_selectedFilter != 0) {
-      final type = _selectedFilter == 1 ? 'movie' : 'tv';
-      result = result.where((e) => e['type'] == type).toList();
+  Future<void> _fetchCategory(int idx) async {
+    if ((_loadingTrending[idx] ?? false) || (_loadingPopular[idx] ?? false)) return;
+    await Future.wait([_fetchTrending(idx), _fetchPopular(idx)]);
+  }
+
+  Future<void> _fetchTrending(int idx) async {
+    if (!mounted) return;
+    setState(() => _loadingTrending[idx] = true);
+    final cat = _categories[idx];
+    try {
+      List<Map<String, dynamic>> items;
+      if (cat.mediaType == 'all') {
+        // All: use /trending/all/week
+        final resp = await _dio.get('$_tmdbBase/trending/all/week',
+            queryParameters: {'page': 1});
+        items = _parseItems(resp.data['results'] as List? ?? [], defaultType: 'movie');
+      } else {
+        final endpoint = cat.mediaType == 'tv' ? 'tv' : 'movie';
+        final resp = await _dio.get('$_tmdbBase/discover/$endpoint',
+            queryParameters: {...cat.trendingParams, 'page': 1});
+        items = _parseItems(resp.data['results'] as List? ?? [],
+            defaultType: cat.mediaType);
+      }
+      if (mounted) {
+        setState(() {
+          _trendingByCategory[idx] = items;
+          _loadingTrending[idx] = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingTrending[idx] = false);
     }
-    // Category filter
+  }
+
+  Future<void> _fetchPopular(int idx) async {
+    if (!mounted) return;
+    setState(() => _loadingPopular[idx] = true);
+    final cat = _categories[idx];
+    try {
+      List<Map<String, dynamic>> items;
+      if (cat.mediaType == 'all') {
+        // All popular: discover movies released this month
+        final resp = await _dio.get('$_tmdbBase/discover/movie', queryParameters: {
+          ...cat.popularParams,
+          'release_date.gte': _monthStart,
+          'release_date.lte': _monthEnd,
+          'page': 1,
+        });
+        items = _parseItems(resp.data['results'] as List? ?? [], defaultType: 'movie');
+        // Fallback to all-time popular if month is sparse
+        if (items.length < 4) {
+          final fb = await _dio.get('$_tmdbBase/discover/movie',
+              queryParameters: {...cat.popularParams, 'page': 1});
+          items = _parseItems(fb.data['results'] as List? ?? [], defaultType: 'movie');
+        }
+      } else {
+        final endpoint = cat.mediaType == 'tv' ? 'tv' : 'movie';
+        final resp = await _dio.get('$_tmdbBase/discover/$endpoint',
+            queryParameters: {...cat.popularParams, 'page': 1});
+        items = _parseItems(resp.data['results'] as List? ?? [],
+            defaultType: cat.mediaType);
+      }
+      if (mounted) {
+        setState(() {
+          _popularByCategory[idx] = items.take(8).toList();
+          _loadingPopular[idx] = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) setState(() => _loadingPopular[idx] = false);
+    }
+  }
+
+  List<Map<String, dynamic>> _parseItems(List raw, {required String defaultType}) {
+    return raw.map<Map<String, dynamic>>((r) {
+      final mediaType    = r['media_type']    as String? ?? defaultType;
+      final posterPath   = r['poster_path']   as String?;
+      final backdropPath = r['backdrop_path'] as String?;
+      final title        = (r['title'] ?? r['name'] ?? 'Unknown') as String;
+      final dateRaw      = (r['release_date'] ?? r['first_air_date'] ?? '') as String;
+      final year         = dateRaw.length >= 4 ? dateRaw.substring(0, 4) : '';
+      return {
+        'id':          r['id'],
+        'title':       title,
+        'type':        mediaType == 'tv' ? 'tv' : 'movie',
+        'posterUrl':   posterPath   != null ? '$_imageBase/w342$posterPath'   : '',
+        'backdropUrl': backdropPath != null ? '$_imageBase/w780$backdropPath' : '',
+        'posterSemanticLabel':   'Poster for $title',
+        'backdropSemanticLabel': 'Backdrop for $title',
+        'rating':   (r['vote_average'] as num?)?.toDouble() ?? 0.0,
+        'year':      year,
+        'genres':   <String>[],
+        'runtime':  '',
+        'overview':  r['overview'] ?? '',
+        'voteCount': r['vote_count'] ?? 0,
+      };
+    }).toList();
+  }
+
+  void _onCategorySelected(int idx) {
+    setState(() => _selectedCategory = idx);
+    // Lazy-fetch if not yet loaded
+    if ((_trendingByCategory[idx] == null) || (_popularByCategory[idx] == null)) {
+      _fetchCategory(idx);
+    }
+  }
+
+  Future<void> _onRefresh() async {
+    // Clear cache for current category and re-fetch
+    _trendingByCategory.remove(_selectedCategory);
+    _popularByCategory.remove(_selectedCategory);
+    await _fetchCategory(_selectedCategory);
+    // Also refresh "All" for banner
     if (_selectedCategory != 0) {
-      final cat = _categories[_selectedCategory];
-      final tags = _categoryLanguages[cat] ?? [];
-      result = result.where((e) {
-        final lang = (e['language'] as String? ?? '').toLowerCase();
-        final title = (e['title'] as String? ?? '').toLowerCase();
-        // match by language field or by known title keywords
-        for (final tag in tags) {
-          if (lang.contains(tag)) return true;
-        }
-        // Fallback: Hollywood = English movies, Bollywood = Hindi/Indian titles
-        if (cat == 'Hollywood') {
-          return lang.isEmpty || lang == 'en' || lang == 'english';
-        }
-        if (cat == 'Bollywood') {
-          return lang == 'hi' || lang == 'hindi' ||
-              title.contains('bollywood');
-        }
-        if (cat == 'Punjabi') {
-          return lang == 'pa' || lang == 'punjabi';
-        }
-        return false;
-      }).toList();
+      _trendingByCategory.remove(0);
+      await _fetchTrending(0);
     }
-    return result;
+  }
+
+  List<Map<String, dynamic>> get _currentTrending =>
+      _trendingByCategory[_selectedCategory] ?? [];
+
+  List<Map<String, dynamic>> get _currentPopular =>
+      _popularByCategory[_selectedCategory] ?? [];
+
+  bool get _isTrendingLoading => _loadingTrending[_selectedCategory] ?? true;
+  bool get _isPopularLoading  => _loadingPopular[_selectedCategory]  ?? true;
+
+  String get _trendingLabel {
+    final cat = _categories[_selectedCategory];
+    if (cat.label == 'All')       return 'Trending This Week';
+    if (cat.label == 'KDrama')    return 'Trending KDramas';
+    return 'Trending ${cat.label}';
+  }
+
+  String get _popularLabel {
+    final cat = _categories[_selectedCategory];
+    if (cat.label == 'All')       return 'Popular This Month';
+    if (cat.label == 'KDrama')    return 'Popular KDramas';
+    return 'Popular ${cat.label}';
   }
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final isTablet = MediaQuery.of(context).size.width >= 600;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
       extendBodyBehindAppBar: true,
-      appBar: _buildGlassAppBar(theme),
+      appBar: _buildGlassAppBar(),
       body: RefreshIndicator(
         color: AppTheme.primary,
         backgroundColor: AppTheme.surfaceDark,
-        onRefresh: () async {
-          // TODO: Replace with TMDB API refresh calls
-          await Future.value();
-        },
+        onRefresh: _onRefresh,
         child: CustomScrollView(
           controller: _scrollController,
           slivers: [
@@ -420,126 +300,101 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const SizedBox(height: kToolbarHeight + 56),
-                  // Featured Banner
-                  FeaturedBannerWidget(
-                    items: _featured,
-                    onTap: (item) => context.push(
-                      AppRoutes.movieTvShowDetailScreen,
-                      extra: item,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  // Filter chips (All / Movies / TV Shows)
-                  FilterChipsWidget(
-                    options: _filterOptions,
-                    selectedIndex: _selectedFilter,
-                    onSelected: (i) => setState(() => _selectedFilter = i),
-                  ),
-                  const SizedBox(height: 12),
-                  // Category chips (All / Punjabi / Hollywood / Bollywood)
-                  _CategoryChipsRow(
-                    categories: _categories,
-                    selectedIndex: _selectedCategory,
-                    onSelected: (i) => setState(() => _selectedCategory = i),
-                  ),
-                  const SizedBox(height: 24),
-                  // Trending Now
-                  SectionHeaderWidget(
-                    title: 'Trending Now',
-                    iconName: 'local_fire_department_rounded',
-                    onSeeMore: () => context.push(
-                      AppRoutes.seeAllScreen,
-                      extra: {'title': 'Trending Now', 'items': _filteredList(_trending)},
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  SizedBox(
-                    height: 220,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 16),
-                      itemCount: _filteredList(_trending).length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 12),
-                      itemBuilder: (context, i) {
-                        final item = _filteredList(_trending)[i];
-                        return TrendingCardWidget(
-                          item: item,
-                          index: i,
-                          onTap: () => context.push(
-                            AppRoutes.movieTvShowDetailScreen,
-                            extra: item,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  // Popular
-                  SectionHeaderWidget(
-                    title: 'Popular Right Now',
-                    iconName: 'trending_up_rounded',
-                    onSeeMore: () => context.push(
-                      AppRoutes.seeAllScreen,
-                      extra: {'title': 'Popular Right Now', 'items': _filteredList(_popular)},
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Padding(
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    child: GridView.builder(
-                      shrinkWrap: true,
-                      physics: const NeverScrollableScrollPhysics(),
-                      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                        crossAxisCount: isTablet ? 3 : 2,
-                        childAspectRatio: 0.65,
-                        crossAxisSpacing: 12,
-                        mainAxisSpacing: 12,
-                      ),
-                      itemCount: _filteredList(_popular).length,
-                      itemBuilder: (context, i) {
-                        final item = _filteredList(_popular)[i];
-                        return MovieGridCardWidget(
-                          item: item,
-                          onTap: () => context.push(
-                            AppRoutes.movieTvShowDetailScreen,
-                            extra: item,
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 28),
-                  // Genre Browse
-                  SectionHeaderWidget(
-                    title: 'Browse by Genre',
-                    iconName: 'filter_list_rounded',
-                    onSeeMore: null,
-                  ),
-                  const SizedBox(height: 12),
-                  GenreChipRowWidget(genres: _genreList),
-                  const SizedBox(height: 28),
-                  const SizedBox(height: 28),
-                  // Top Rated
-                  SectionHeaderWidget(
-                    title: 'Top Rated All Time',
-                    iconName: 'workspace_premium_rounded',
-                    onSeeMore: () => context.push(
-                      AppRoutes.seeAllScreen,
-                      extra: {'title': 'Top Rated All Time', 'items': _filteredList(_topRated)},
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  ...(_filteredList(_topRated).map(
-                    (item) => TopRatedRowWidget(
-                      item: item,
-                      onTap: () => context.push(
+                  // ── Featured banner (always from "All" trending) ──
+                  if (_featured.isNotEmpty)
+                    FeaturedBannerWidget(
+                      items: _featured,
+                      onTap: (item) => context.push(
                         AppRoutes.movieTvShowDetailScreen,
                         extra: item,
                       ),
+                    )
+                  else if (_loadingTrending[0] ?? true)
+                    const SizedBox(height: 200),
+                  const SizedBox(height: 20),
+                  // ── Category chips ──
+                  _CategoryChipsRow(
+                    categories: _categories,
+                    selectedIndex: _selectedCategory,
+                    onSelected: _onCategorySelected,
+                  ),
+                  const SizedBox(height: 24),
+                  // ── Trending row ──
+                  SectionHeaderWidget(
+                    title: _trendingLabel,
+                    iconName: 'local_fire_department_rounded',
+                    onSeeMore: _currentTrending.isEmpty ? null : () => context.push(
+                      AppRoutes.seeAllScreen,
+                      extra: {'title': _trendingLabel, 'items': _currentTrending},
                     ),
-                  )),
-                  const SizedBox(height: 32),
-                  // ── Themed category sections with More button ──
+                  ),
+                  const SizedBox(height: 12),
+                  if (_isTrendingLoading)
+                    _HorizontalSkeleton()
+                  else if (_currentTrending.isEmpty)
+                    _EmptySection(label: _trendingLabel)
+                  else
+                    SizedBox(
+                      height: 220,
+                      child: ListView.separated(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.symmetric(horizontal: 16),
+                        itemCount: _currentTrending.length,
+                        separatorBuilder: (_, __) => const SizedBox(width: 12),
+                        itemBuilder: (context, i) {
+                          final item = _currentTrending[i];
+                          return TrendingCardWidget(
+                            item: item,
+                            index: i,
+                            onTap: () => context.push(
+                              AppRoutes.movieTvShowDetailScreen,
+                              extra: item,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 28),
+                  // ── Popular grid ──
+                  SectionHeaderWidget(
+                    title: _popularLabel,
+                    iconName: 'trending_up_rounded',
+                    onSeeMore: _currentPopular.isEmpty ? null : () => context.push(
+                      AppRoutes.seeAllScreen,
+                      extra: {'title': _popularLabel, 'items': _currentPopular},
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  if (_isPopularLoading)
+                    _GridSkeleton()
+                  else if (_currentPopular.isEmpty)
+                    _EmptySection(label: _popularLabel)
+                  else
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 16),
+                      child: GridView.builder(
+                        shrinkWrap: true,
+                        physics: const NeverScrollableScrollPhysics(),
+                        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                          crossAxisCount: isTablet ? 3 : 2,
+                          childAspectRatio: 0.65,
+                          crossAxisSpacing: 12,
+                          mainAxisSpacing: 12,
+                        ),
+                        itemCount: _currentPopular.length,
+                        itemBuilder: (context, i) {
+                          final item = _currentPopular[i];
+                          return MovieGridCardWidget(
+                            item: item,
+                            onTap: () => context.push(
+                              AppRoutes.movieTvShowDetailScreen,
+                              extra: item,
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  const SizedBox(height: 28),
                   const HomeSectionsWidget(),
                   const SizedBox(height: 100),
                 ],
@@ -551,7 +406,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     );
   }
 
-  PreferredSizeWidget _buildGlassAppBar(ThemeData theme) {
+  PreferredSizeWidget _buildGlassAppBar() {
     return PreferredSize(
       preferredSize: const Size.fromHeight(60),
       child: ClipRect(
@@ -566,10 +421,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                 : Colors.transparent,
             child: SafeArea(
               child: Padding(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 8,
-                ),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                 child: Row(
                   children: [
                     Text(
@@ -582,29 +434,25 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                     const Spacer(),
-                    _GlassIconButton(iconName: 'search_rounded', onTap: () => context.push(AppRoutes.searchScreen)),
+                    _GlassIconButton(
+                      iconName: 'search_rounded',
+                      onTap: () => context.push(AppRoutes.searchScreen),
+                    ),
                     const SizedBox(width: 8),
                     _GlassFilterButton(
                       activeCount: _activeFilters.activeCount,
                       onTap: () async {
-                        final result =
-                            await showModalBottomSheet<SearchFilters>(
+                        final result = await showModalBottomSheet<SearchFilters>(
                           context: context,
                           isScrollControlled: true,
                           backgroundColor: Colors.transparent,
-                          builder: (_) =>
-                              FilterSheet(current: _activeFilters),
+                          builder: (_) => FilterSheet(current: _activeFilters),
                         );
-                        if (result != null) {
-                          setState(() => _activeFilters = result);
-                        }
+                        if (result != null) setState(() => _activeFilters = result);
                       },
                     ),
                     const SizedBox(width: 8),
-                    _GlassIconButton(
-                      iconName: 'notifications_none_rounded',
-                      onTap: () {},
-                    ),
+                    _GlassIconButton(iconName: 'notifications_none_rounded', onTap: () {}),
                   ],
                 ),
               ),
@@ -616,12 +464,83 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// ─── Skeletons ────────────────────────────────────────────────────────────────
+
+class _HorizontalSkeleton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 220,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: 5,
+        separatorBuilder: (_, __) => const SizedBox(width: 12),
+        itemBuilder: (_, __) => Container(
+          width: 140,
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceVariantDark,
+            borderRadius: BorderRadius.circular(14),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _GridSkeleton extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final isTablet = MediaQuery.of(context).size.width >= 600;
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GridView.builder(
+        shrinkWrap: true,
+        physics: const NeverScrollableScrollPhysics(),
+        gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: isTablet ? 3 : 2,
+          childAspectRatio: 0.65,
+          crossAxisSpacing: 12,
+          mainAxisSpacing: 12,
+        ),
+        itemCount: 4,
+        itemBuilder: (_, __) => Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceVariantDark,
+            borderRadius: BorderRadius.circular(12),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _EmptySection extends StatelessWidget {
+  final String label;
+  const _EmptySection({required this.label});
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
+      child: Center(
+        child: Text(
+          'No results found for $label',
+          style: GoogleFonts.outfit(
+            fontSize: 13,
+            color: const Color(0xFF888899),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Glass buttons ────────────────────────────────────────────────────────────
 
 class _GlassIconButton extends StatelessWidget {
   final String iconName;
   final VoidCallback onTap;
-
   const _GlassIconButton({required this.iconName, required this.onTap});
 
   @override
@@ -629,18 +548,13 @@ class _GlassIconButton extends StatelessWidget {
     return GestureDetector(
       onTap: onTap,
       child: Container(
-        width: 38,
-        height: 38,
+        width: 38, height: 38,
         decoration: BoxDecoration(
           color: Colors.white.withAlpha(20),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: Colors.white.withAlpha(26)),
         ),
-        child: CustomIconWidget(
-          iconName: iconName,
-          color: Colors.white,
-          size: 20,
-        ),
+        child: CustomIconWidget(iconName: iconName, color: Colors.white, size: 20),
       ),
     );
   }
@@ -649,7 +563,6 @@ class _GlassIconButton extends StatelessWidget {
 class _GlassFilterButton extends StatelessWidget {
   final int activeCount;
   final VoidCallback onTap;
-
   const _GlassFilterButton({required this.activeCount, required this.onTap});
 
   @override
@@ -661,39 +574,26 @@ class _GlassFilterButton extends StatelessWidget {
         height: 38,
         padding: const EdgeInsets.symmetric(horizontal: 10),
         decoration: BoxDecoration(
-          color: isActive
-              ? AppTheme.primary.withAlpha(40)
-              : Colors.white.withAlpha(20),
+          color: isActive ? AppTheme.primary.withAlpha(40) : Colors.white.withAlpha(20),
           borderRadius: BorderRadius.circular(12),
           border: Border.all(
-            color: isActive
-                ? AppTheme.primary.withAlpha(120)
-                : Colors.white.withAlpha(26),
+            color: isActive ? AppTheme.primary.withAlpha(120) : Colors.white.withAlpha(26),
           ),
         ),
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.tune_rounded,
-                size: 16,
+            Icon(Icons.tune_rounded, size: 16,
                 color: isActive ? AppTheme.primary : Colors.white),
             if (isActive) ...[
               const SizedBox(width: 4),
               Container(
-                width: 18,
-                height: 18,
-                decoration: BoxDecoration(
-                  color: AppTheme.primary,
-                  shape: BoxShape.circle,
-                ),
+                width: 18, height: 18,
+                decoration: BoxDecoration(color: AppTheme.primary, shape: BoxShape.circle),
                 child: Center(
-                  child: Text(
-                    '$activeCount',
-                    style: const TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: Colors.white),
-                  ),
+                  child: Text('$activeCount',
+                      style: const TextStyle(
+                          fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white)),
                 ),
               ),
             ],
@@ -707,7 +607,7 @@ class _GlassFilterButton extends StatelessWidget {
 // ─── Category chips ───────────────────────────────────────────────────────────
 
 class _CategoryChipsRow extends StatelessWidget {
-  final List<String> categories;
+  final List<_Category> categories;
   final int selectedIndex;
   final void Function(int) onSelected;
 
@@ -716,13 +616,6 @@ class _CategoryChipsRow extends StatelessWidget {
     required this.selectedIndex,
     required this.onSelected,
   });
-
-  static const Map<String, String> _icons = {
-    'All': '🎬',
-    'Punjabi': '🎵',
-    'Hollywood': '⭐',
-    'Bollywood': '💃',
-  };
 
   @override
   Widget build(BuildContext context) {
@@ -734,18 +627,15 @@ class _CategoryChipsRow extends StatelessWidget {
         itemCount: categories.length,
         separatorBuilder: (_, __) => const SizedBox(width: 8),
         itemBuilder: (context, i) {
-          final cat = categories[i];
+          final cat      = categories[i];
           final selected = i == selectedIndex;
-          final emoji = _icons[cat] ?? '🎬';
           return GestureDetector(
             onTap: () => onSelected(i),
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
-                color: selected
-                    ? AppTheme.accent.withAlpha(220)
-                    : AppTheme.surfaceVariantDark,
+                color: selected ? AppTheme.accent.withAlpha(220) : AppTheme.surfaceVariantDark,
                 borderRadius: BorderRadius.circular(20),
                 border: Border.all(
                   color: selected ? AppTheme.accent : const Color(0xFF444466),
@@ -754,17 +644,14 @@ class _CategoryChipsRow extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Text(emoji, style: const TextStyle(fontSize: 13)),
+                  Text(cat.emoji, style: const TextStyle(fontSize: 13)),
                   const SizedBox(width: 5),
                   Text(
-                    cat,
+                    cat.label,
                     style: GoogleFonts.outfit(
                       fontSize: 13,
-                      fontWeight:
-                          selected ? FontWeight.w700 : FontWeight.w400,
-                      color: selected
-                          ? Colors.black
-                          : const Color(0xFF888899),
+                      fontWeight: selected ? FontWeight.w700 : FontWeight.w400,
+                      color: selected ? Colors.black : const Color(0xFF888899),
                     ),
                   ),
                 ],

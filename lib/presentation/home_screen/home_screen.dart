@@ -56,41 +56,45 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   // Categories — each fetches its own TMDB data
   static const List<_Category> _categories = [
-    _Category(
-      label: 'All',
-      emoji: '🎬',
-      mediaType: 'all',
-      trendingParams: {},               // uses /trending/all/week
-      popularParams: {'sort_by': 'popularity.desc', 'include_adult': false},
-    ),
-    _Category(
-      label: 'Punjabi',
-      emoji: '🎵',
-      mediaType: 'movie',
-      trendingParams: {'with_original_language': 'pa', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'pa', 'sort_by': 'popularity.desc', 'include_adult': false},
-    ),
-    _Category(
-      label: 'Hollywood',
-      emoji: '⭐',
-      mediaType: 'movie',
+    _Category(label: 'All',        emoji: '🌐', mediaType: 'all',
+      trendingParams: {},
+      popularParams:  {'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'Hollywood',  emoji: '🇺🇸', mediaType: 'movie',
       trendingParams: {'with_original_language': 'en', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'en', 'sort_by': 'popularity.desc', 'include_adult': false},
-    ),
-    _Category(
-      label: 'Bollywood',
-      emoji: '💃',
-      mediaType: 'movie',
+      popularParams:  {'with_original_language': 'en', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'Bollywood',  emoji: '🇮🇳', mediaType: 'movie',
       trendingParams: {'with_original_language': 'hi', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'hi', 'sort_by': 'popularity.desc', 'include_adult': false},
-    ),
-    _Category(
-      label: 'KDrama',
-      emoji: '🎭',
-      mediaType: 'tv',
+      popularParams:  {'with_original_language': 'hi', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'Punjabi',    emoji: '🎵', mediaType: 'movie',
+      trendingParams: {'with_original_language': 'pa', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'pa', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'KDrama',     emoji: '🇰🇷', mediaType: 'tv',
       trendingParams: {'with_original_language': 'ko', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'ko', 'sort_by': 'popularity.desc', 'include_adult': false},
-    ),
+      popularParams:  {'with_original_language': 'ko', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'Anime',      emoji: '🇯🇵', mediaType: 'tv',
+      trendingParams: {'with_original_language': 'ja', 'with_genres': '16', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'ja', 'with_genres': '16', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'Turkish',    emoji: '🇹🇷', mediaType: 'tv',
+      trendingParams: {'with_original_language': 'tr', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'tr', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'Arabic',     emoji: '🇸🇦', mediaType: 'movie',
+      trendingParams: {'with_original_language': 'ar', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'ar', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'Chinese',    emoji: '🇨🇳', mediaType: 'movie',
+      trendingParams: {'with_original_language': 'zh', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'zh', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'Spanish',    emoji: '🇪🇸', mediaType: 'movie',
+      trendingParams: {'with_original_language': 'es', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'es', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'French',     emoji: '🇫🇷', mediaType: 'movie',
+      trendingParams: {'with_original_language': 'fr', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'fr', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'Tamil',      emoji: '🎞️', mediaType: 'movie',
+      trendingParams: {'with_original_language': 'ta', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'ta', 'sort_by': 'popularity.desc', 'include_adult': false}),
+    _Category(label: 'Telugu',     emoji: '🎥', mediaType: 'movie',
+      trendingParams: {'with_original_language': 'te', 'sort_by': 'popularity.desc', 'include_adult': false},
+      popularParams:  {'with_original_language': 'te', 'sort_by': 'popularity.desc', 'include_adult': false}),
   ];
 
   int _selectedCategory = 0;
@@ -394,6 +398,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   const SizedBox(height: 28),
+                  // ── Browse by Language banner ──
+                  _LanguageBrowseBanner(
+                    onTap: () => context.push(AppRoutes.languageBrowseScreen),
+                  ),
+                  const SizedBox(height: 28),
                   const HomeSectionsWidget(),
                   const SizedBox(height: 100),
                 ],
@@ -433,6 +442,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                     const Spacer(),
+                    _GlassIconButton(
+                      iconName: 'language_rounded',
+                      onTap: () => context.push(AppRoutes.languageBrowseScreen),
+                    ),
+                    const SizedBox(width: 8),
                     _GlassIconButton(
                       iconName: 'search_rounded',
                       onTap: () => context.push(AppRoutes.searchScreen),
@@ -663,6 +677,104 @@ class _CategoryChipsRow extends StatelessWidget {
             ),
           );
         },
+      ),
+    );
+  }
+}
+
+// ─── Language browse banner ───────────────────────────────────────────────────
+
+class _LanguageBrowseBanner extends StatelessWidget {
+  final VoidCallback onTap;
+  const _LanguageBrowseBanner({required this.onTap});
+
+  static const _previews = ['🇺🇸', '🇮🇳', '🇰🇷', '🇯🇵', '🇨🇳', '🇹🇷', '🇸🇦', '🇪🇸'];
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(18),
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                const Color(0xFF1A1A2E),
+                const Color(0xFF16213E),
+                const Color(0xFF0F3460),
+              ],
+            ),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(color: Colors.white.withAlpha(20), width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withAlpha(40),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppTheme.primary.withAlpha(100)),
+                  ),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.language_rounded,
+                        color: AppTheme.primary, size: 14),
+                    const SizedBox(width: 5),
+                    Text('20+ Languages', style: GoogleFonts.outfit(
+                        fontSize: 11, fontWeight: FontWeight.w700,
+                        color: AppTheme.primary)),
+                  ]),
+                ),
+                const Spacer(),
+                const Icon(Icons.arrow_forward_ios_rounded,
+                    color: Colors.white54, size: 14),
+              ]),
+              const SizedBox(height: 10),
+              Text('Browse by Language',
+                  style: GoogleFonts.outfit(
+                      fontSize: 20, fontWeight: FontWeight.w800,
+                      color: Colors.white, letterSpacing: -0.3)),
+              const SizedBox(height: 4),
+              Text('Hollywood · Bollywood · KDrama · Anime · Turkish · Arabic & more',
+                  style: GoogleFonts.outfit(
+                      fontSize: 12, color: Colors.white.withAlpha(160), height: 1.4),
+                  maxLines: 2),
+              const SizedBox(height: 14),
+              // Flag preview row
+              Row(children: [
+                ..._previews.map((f) => Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  width: 32, height: 32,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withAlpha(15),
+                    shape: BoxShape.circle,
+                    border: Border.all(color: Colors.white.withAlpha(30)),
+                  ),
+                  child: Center(child: Text(f,
+                      style: const TextStyle(fontSize: 16))),
+                )),
+                const SizedBox(width: 4),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary,
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text('Browse All', style: GoogleFonts.outfit(
+                      fontSize: 11, fontWeight: FontWeight.w700,
+                      color: Colors.white)),
+                ),
+              ]),
+            ],
+          ),
+        ),
       ),
     );
   }

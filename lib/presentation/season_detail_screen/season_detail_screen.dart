@@ -214,7 +214,7 @@ class _PlayerAreaState extends State<_PlayerArea>
       backgroundColor: const Color(0xFF1E1E2E),
       shape: const RoundedRectangleBorder(
           borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => SafeArea(
+      builder: (sheetCtx) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
           Container(width: 40, height: 4,
               margin: const EdgeInsets.symmetric(vertical: 10),
@@ -230,21 +230,21 @@ class _PlayerAreaState extends State<_PlayerArea>
             title: Text('Playback speed', style: GoogleFonts.outfit(color: Colors.white)),
             trailing: Text('1.0x', style: GoogleFonts.outfit(
                 color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            onTap: () { Navigator.pop(_); showSpeedSheet(context); },
+            onTap: () { Navigator.pop(sheetCtx); showSpeedSheet(context); },
           ),
           ListTile(
             leading: const Icon(Icons.subtitles_rounded, color: Color(0xFF888899)),
             title: Text('Subtitles', style: GoogleFonts.outfit(color: Colors.white)),
             trailing: Text('Off', style: GoogleFonts.outfit(
                 color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            onTap: () { Navigator.pop(_); showSubtitleSheet(context); },
+            onTap: () { Navigator.pop(sheetCtx); showSubtitleSheet(context); },
           ),
           ListTile(
             leading: const Icon(Icons.audiotrack_rounded, color: Color(0xFF888899)),
             title: Text('Audio track', style: GoogleFonts.outfit(color: Colors.white)),
             trailing: Text('Default', style: GoogleFonts.outfit(
                 color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            onTap: () { Navigator.pop(_); showAudioSheet(context); },
+            onTap: () { Navigator.pop(sheetCtx); showAudioSheet(context); },
           ),
           const SizedBox(height: 8),
         ]),
@@ -300,6 +300,7 @@ class _PlayerAreaState extends State<_PlayerArea>
                 onSeek:      (v) => setState(() { _progress = v; }),
                 onRewind:    () => setState(() => _progress = (_progress - 0.05).clamp(0.0, 1.0)),
                 onForward:   () => setState(() => _progress = (_progress + 0.05).clamp(0.0, 1.0)),
+                onSettings:  () => _showEpisodeSettings(context),
               ),
             ),
 
@@ -341,6 +342,7 @@ class _ControlsOverlay extends StatelessWidget {
   final VoidCallback onPlay;
   final VoidCallback onRewind;
   final VoidCallback onForward;
+  final VoidCallback onSettings;
   final void Function(double) onSeek;
 
   const _ControlsOverlay({
@@ -350,7 +352,7 @@ class _ControlsOverlay extends StatelessWidget {
     required this.isExpanded,  required this.onBack,
     required this.onExpand,    required this.onPlay,
     required this.onSeek,      required this.onRewind,
-    required this.onForward,
+    required this.onForward,   required this.onSettings,
   });
 
   String _formatTime(double p, {bool total = false}) {
@@ -460,7 +462,7 @@ class _ControlsOverlay extends StatelessWidget {
                         onTap: () => showSubtitleSheet(context)),
                     const SizedBox(width: 8),
                     _SmallBtn(icon: Icons.settings_outlined,
-                        onTap: () => _showEpisodeSettings(context)),
+                        onTap: onSettings),
                     const SizedBox(width: 8),
                     _SmallBtn(icon: Icons.volume_up_rounded,
                         onTap: () => showVolumeSheet(context)),
@@ -828,10 +830,29 @@ class _EpisodeTile extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
               child: Row(children: [
-                // Watch button
+                // Watch button — opens real WebView player
                 Expanded(
                   child: GestureDetector(
-                    onTap: () => onTap(),
+                    onTap: () {
+                      onTap(); // select locally
+                      final showId    = episode['showId']    as int?;
+                      final seasonNum = episode['seasonNum'] as int?;
+                      final epNum2    = episode['episodeNumber'] as int? ?? 1;
+                      if (showId != null && seasonNum != null) {
+                        context.push(
+                          AppRoutes.moviePlayerScreen,
+                          extra: {
+                            ...episode,
+                            'type':    'tv',
+                            'season':  seasonNum,
+                            'episode': epNum2,
+                            'id':      showId,
+                          },
+                        );
+                      } else {
+                        onTap();
+                      }
+                    },
                     child: Container(
                       height: 34,
                       decoration: BoxDecoration(
@@ -844,12 +865,10 @@ class _EpisodeTile extends StatelessWidget {
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
                           Icon(
-                            isSelected
-                                ? Icons.pause_rounded
-                                : Icons.play_arrow_rounded,
+                            Icons.play_arrow_rounded,
                             color: Colors.white, size: 16),
                           const SizedBox(width: 4),
-                          Text(isSelected ? 'Playing' : 'Watch',
+                          Text('Watch',
                               style: GoogleFonts.outfit(
                                   fontSize: 12, fontWeight: FontWeight.w600,
                                   color: Colors.white)),

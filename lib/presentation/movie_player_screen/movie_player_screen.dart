@@ -1,19 +1,87 @@
-import 'dart:async';
-import 'dart:math';
-
 import 'package:google_fonts/google_fonts.dart';
+import 'package:webview_flutter/webview_flutter.dart';
 
 import '../../core/app_export.dart';
 import '../../utils/app_actions.dart';
 
+// ─── Server model ─────────────────────────────────────────────────────────────
+
+class VideoServer {
+  final String name;
+  final String label;
+  final String icon;
+  final String Function(Map<String, dynamic> item, {int? season, int? episode}) buildUrl;
+
+  const VideoServer({
+    required this.name,
+    required this.label,
+    required this.icon,
+    required this.buildUrl,
+  });
+}
+
+// ─── Available servers ────────────────────────────────────────────────────────
+
+final List<VideoServer> kVideoServers = [
+  VideoServer(
+    name: 'vidfast',
+    label: 'VidFast',
+    icon: '⚡',
+    buildUrl: (item, {season, episode}) {
+      final id   = item['id'] as int? ?? 0;
+      final type = item['type'] as String? ?? 'movie';
+      final theme = '6C5CE7'; // matches AppTheme.primary
+      if (type == 'tv' && season != null && episode != null) {
+        return 'https://vidfast.pro/tv/$id/$season/$episode?autoPlay=true&theme=$theme&nextButton=true&autoNext=true';
+      }
+      return 'https://vidfast.pro/movie/$id?autoPlay=true&theme=$theme';
+    },
+  ),
+  VideoServer(
+    name: 'vidsrc',
+    label: 'VidSrc',
+    icon: '🎬',
+    buildUrl: (item, {season, episode}) {
+      final id   = item['id'] as int? ?? 0;
+      final type = item['type'] as String? ?? 'movie';
+      if (type == 'tv' && season != null && episode != null) {
+        return 'https://vidsrc.xyz/embed/tv?tmdb=$id&season=$season&episode=$episode';
+      }
+      return 'https://vidsrc.xyz/embed/movie?tmdb=$id';
+    },
+  ),
+  VideoServer(
+    name: 'superembed',
+    label: 'SuperEmbed',
+    icon: '🚀',
+    buildUrl: (item, {season, episode}) {
+      final id   = item['id'] as int? ?? 0;
+      final type = item['type'] as String? ?? 'movie';
+      if (type == 'tv' && season != null && episode != null) {
+        return 'https://multiembed.mov/directstream.php?video_id=$id&tmdb=1&s=$season&e=$episode';
+      }
+      return 'https://multiembed.mov/directstream.php?video_id=$id&tmdb=1';
+    },
+  ),
+  VideoServer(
+    name: 'embed2',
+    label: 'Embed2',
+    icon: '📺',
+    buildUrl: (item, {season, episode}) {
+      final id   = item['id'] as int? ?? 0;
+      final type = item['type'] as String? ?? 'movie';
+      if (type == 'tv' && season != null && episode != null) {
+        return 'https://www.2embed.cc/embedtv/$id&s=$season&e=$episode';
+      }
+      return 'https://www.2embed.cc/embed/$id';
+    },
+  ),
+];
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Movie Player Screen
-// Route extra: {
-//   'title':      String,
-//   'backdropUrl': String,
-//   'year':       String,
-//   'runtime':    String,
-// }
+// Movie / Episode Player Screen
+// Route extra: item map (same schema as detail screen)
+// Optional: 'season' (int), 'episode' (int) for TV episodes
 // ─────────────────────────────────────────────────────────────────────────────
 
 class MoviePlayerScreen extends StatefulWidget {
@@ -24,397 +92,421 @@ class MoviePlayerScreen extends StatefulWidget {
   State<MoviePlayerScreen> createState() => _MoviePlayerScreenState();
 }
 
-class _MoviePlayerScreenState extends State<MoviePlayerScreen>
-    with SingleTickerProviderStateMixin {
-  bool   _isPlaying    = false;
-  bool   _showControls = true;
-  double _progress     = 0.0;
-  bool   _isMuted      = false;
-  bool   _isFullscreen = false;
-  Timer? _hideTimer;
-  Timer? _progressTimer;
+class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
+  late WebViewController _controller;
+  int    _serverIndex  = 0;
+  bool   _isLoading    = true;
+  bool   _hasError     = false;
 
-  late AnimationController _pulseCtrl;
+  // For TV episodes passed via item map
+  int? get _season  => widget.item['season']  as int?;
+  int? get _episode => widget.item['episode'] as int?;
+
+  String get _currentUrl =>
+      kVideoServers[_serverIndex].buildUrl(
+        widget.item,
+        season:  _season,
+        episode: _episode,
+      );
 
   @override
   void initState() {
     super.initState();
-    _pulseCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 1100))
-      ..repeat(reverse: true);
-    _scheduleHide();
+    _initController();
   }
 
-  @override
-  void dispose() {
-    _hideTimer?.cancel();
-    _progressTimer?.cancel();
-    _pulseCtrl.dispose();
-    super.dispose();
+  void _initController() {
+    _controller = WebViewController()
+      ..setJavaScriptMode(JavaScriptMode.unrestricted)
+      ..setBackgroundColor(Colors.black)
+      ..setNavigationDelegate(NavigationDelegate(
+        onPageStarted: (_) {
+          if (mounted) setState(() { _isLoading = true; _hasError = false; });
+        },
+        onPageFinished: (_) {
+          if (mounted) setState(() => _isLoading = false);
+        },
+        onWebResourceError: (_) {
+          if (mounted) setState(() { _isLoading = false; _hasError = true; });
+        },
+      ))
+      ..loadRequest(Uri.parse(_currentUrl));
   }
 
-  void _scheduleHide() {
-    _hideTimer?.cancel();
-    _hideTimer = Timer(const Duration(seconds: 4), () {
-      if (mounted && _isPlaying) setState(() => _showControls = false);
+  void _switchServer(int idx) {
+    if (idx == _serverIndex) return;
+    setState(() {
+      _serverIndex = idx;
+      _isLoading   = true;
+      _hasError    = false;
     });
+    _controller.loadRequest(Uri.parse(_currentUrl));
   }
 
-  void _onTap() {
-    setState(() => _showControls = !_showControls);
-    if (_showControls) _scheduleHide();
-  }
-
-  void _togglePlay() {
-    setState(() => _isPlaying = !_isPlaying);
-    if (_isPlaying) {
-      _startProgress();
-      _scheduleHide();
-    } else {
-      _progressTimer?.cancel();
-      _hideTimer?.cancel();
-      setState(() => _showControls = true);
-    }
-  }
-
-  void _startProgress() {
-    _progressTimer?.cancel();
-    _progressTimer =
-        Timer.periodic(const Duration(milliseconds: 250), (_) {
-      if (!mounted) return;
-      final inc = 0.003 + Random().nextDouble() * 0.004;
-      final np  = (_progress + inc).clamp(0.0, 1.0);
-      setState(() => _progress = np);
-      if (np >= 1.0) {
-        _progressTimer?.cancel();
-        setState(() { _isPlaying = false; _showControls = true; });
-      }
-    });
-  }
-
-  void _seek(double v) {
-    setState(() => _progress = v);
-    if (_isPlaying) _scheduleHide();
-  }
-
-  void _skip(double delta) {
-    setState(() => _progress = (_progress + delta).clamp(0.0, 1.0));
-    _scheduleHide();
-  }
-
-  String _formatTime(double p, {bool total = false}) {
-    // Derive fake duration from runtime string, fallback 120 min
-    final runtime = widget.item['runtime'] as String? ?? '';
-    int totalMin = 120;
-    final match = RegExp(r'(\d+)').firstMatch(runtime);
-    if (match != null) totalMin = int.tryParse(match.group(1)!) ?? 120;
-    final totalSec = totalMin * 60;
-    final sec = total ? totalSec : (p * totalSec).round();
-    final m = sec ~/ 60;
-    final s = sec % 60;
-    return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
+  void _reload() {
+    setState(() { _isLoading = true; _hasError = false; });
+    _controller.reload();
   }
 
   @override
   Widget build(BuildContext context) {
-    final title      = widget.item['title']       as String? ?? '';
-    final backdropUrl = widget.item['backdropUrl'] as String? ?? '';
-    final year       = widget.item['year']         as String? ?? '';
-    final runtime    = widget.item['runtime']      as String? ?? '';
+    final title    = widget.item['title']   as String? ?? '';
+    final type     = widget.item['type']    as String? ?? 'movie';
+    final year     = widget.item['year']    as String? ?? '';
+    final runtime  = widget.item['runtime'] as String? ?? '';
+    final isTv     = type == 'tv';
+    final VideoServer server = kVideoServers[_serverIndex];
 
     return Scaffold(
       backgroundColor: Colors.black,
-      body: GestureDetector(
-        onTap: _onTap,
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            // ── Video area ────────────────────────────────────────────
-            if (backdropUrl.isNotEmpty)
-              Image.network(backdropUrl, fit: BoxFit.cover,
-                  errorBuilder: (_, __, ___) => const _BlackScreen())
-            else
-              const _BlackScreen(),
+      appBar: _buildAppBar(title, isTv, year, runtime, server),
+      body: Column(
+        children: [
+          // ── Video WebView area ─────────────────────────────────
+          AspectRatio(
+            aspectRatio: 16 / 9,
+            child: Stack(
+              fit: StackFit.expand,
+              children: [
+                WebViewWidget(controller: _controller),
 
-            // ── Gradient overlay ──────────────────────────────────────
-            Container(
-              decoration: BoxDecoration(
-                gradient: LinearGradient(
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                  colors: [
-                    Colors.black.withAlpha(_isPlaying ? 80 : 160),
-                    Colors.transparent,
-                    Colors.black.withAlpha(_isPlaying ? 100 : 180),
-                  ],
-                  stops: const [0.0, 0.4, 1.0],
-                ),
-              ),
-            ),
-
-            // ── Buffering spinner ─────────────────────────────────────
-            if (_isPlaying && _progress < 0.01)
-              Center(
-                child: FadeTransition(
-                  opacity: _pulseCtrl,
-                  child: Container(
-                    width: 52, height: 52,
-                    decoration: BoxDecoration(
-                        color: Colors.black.withAlpha(120),
-                        shape: BoxShape.circle),
-                    child: const CircularProgressIndicator(
-                        color: Colors.white, strokeWidth: 2.5),
-                  ),
-                ),
-              ),
-
-            // ── Controls overlay ──────────────────────────────────────
-            AnimatedOpacity(
-              opacity: _showControls ? 1.0 : 0.0,
-              duration: const Duration(milliseconds: 300),
-              child: Column(children: [
-                // ── Top bar ───────────────────────────────────────────
-                SafeArea(
-                  bottom: false,
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(
-                        horizontal: 16, vertical: 10),
-                    child: Row(children: [
-                      _NavBtn(icon: Icons.arrow_back_ios_new_rounded,
-                          onTap: () => context.pop()),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Text(title,
-                                style: GoogleFonts.outfit(
-                                    fontSize: 15,
-                                    fontWeight: FontWeight.w700,
-                                    color: Colors.white),
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis),
-                            if (year.isNotEmpty || runtime.isNotEmpty)
-                              Text(
-                                [year, runtime]
-                                    .where((s) => s.isNotEmpty)
-                                    .join(' · '),
-                                style: GoogleFonts.outfit(
-                                    fontSize: 12,
-                                    color: Colors.white70),
-                              ),
-                          ],
-                        ),
-                      ),
-                      _NavBtn(icon: Icons.cast_rounded,
-                          onTap: () => showCastSheet(context)),
-                      const SizedBox(width: 8),
-                      _NavBtn(
-                        icon: _isFullscreen
-                            ? Icons.fullscreen_exit_rounded
-                            : Icons.fullscreen_rounded,
-                        onTap: () =>
-                            setState(() => _isFullscreen = !_isFullscreen),
-                      ),
-                    ]),
-                  ),
-                ),
-
-                const Spacer(),
-
-                // ── Centre controls ───────────────────────────────────
-                Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                  _NavBtn(icon: Icons.replay_10_rounded, size: 30,
-                      onTap: () => _skip(-10 / (_totalSec))),
-                  const SizedBox(width: 28),
-                  GestureDetector(
-                    onTap: _togglePlay,
-                    child: Container(
-                      width: 66, height: 66,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        boxShadow: [
-                          BoxShadow(color: Colors.black.withAlpha(100),
-                              blurRadius: 20)
+                // Loading overlay
+                if (_isLoading)
+                  Container(
+                    color: Colors.black,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          CircularProgressIndicator(
+                              color: AppTheme.primary, strokeWidth: 2),
+                          const SizedBox(height: 12),
+                          Text('Loading ${server.label}…',
+                              style: GoogleFonts.outfit(
+                                  color: Colors.white70, fontSize: 13)),
                         ],
-                      ),
-                      child: Icon(
-                        _isPlaying
-                            ? Icons.pause_rounded
-                            : Icons.play_arrow_rounded,
-                        color: Colors.black, size: 36,
                       ),
                     ),
                   ),
-                  const SizedBox(width: 28),
-                  _NavBtn(icon: Icons.forward_10_rounded, size: 30,
-                      onTap: () => _skip(10 / (_totalSec))),
-                ]),
 
-                const Spacer(),
-
-                // ── Bottom controls ───────────────────────────────────
-                SafeArea(
-                  top: false,
-                  child: Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
-                    child: Column(children: [
-                      // Seek bar
-                      SliderTheme(
-                        data: SliderTheme.of(context).copyWith(
-                          trackHeight:          3.5,
-                          thumbShape:           const RoundSliderThumbShape(
-                              enabledThumbRadius: 7),
-                          overlayShape:         const RoundSliderOverlayShape(
-                              overlayRadius: 16),
-                          activeTrackColor:     AppTheme.primary,
-                          inactiveTrackColor:   Colors.white.withAlpha(50),
-                          thumbColor:           Colors.white,
-                          overlayColor:         AppTheme.primary.withAlpha(40),
-                        ),
-                        child: Slider(
-                            value: _progress, onChanged: _seek),
+                // Error overlay
+                if (_hasError && !_isLoading)
+                  Container(
+                    color: Colors.black,
+                    child: Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          const Icon(Icons.error_outline_rounded,
+                              color: Colors.white38, size: 48),
+                          const SizedBox(height: 12),
+                          Text('Failed to load player',
+                              style: GoogleFonts.outfit(
+                                  color: Colors.white, fontSize: 15,
+                                  fontWeight: FontWeight.w600)),
+                          const SizedBox(height: 6),
+                          Text('Try a different server',
+                              style: GoogleFonts.outfit(
+                                  color: Colors.white54, fontSize: 12)),
+                          const SizedBox(height: 16),
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              _PlayerBtn(label: 'Retry', icon: Icons.refresh_rounded,
+                                  onTap: _reload),
+                              const SizedBox(width: 12),
+                              _PlayerBtn(label: 'Next Server',
+                                  icon: Icons.swap_horiz_rounded,
+                                  onTap: () => _switchServer(
+                                      (_serverIndex + 1) % kVideoServers.length)),
+                            ],
+                          ),
+                        ],
                       ),
-                      // Time + extras
-                      Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            Text(_formatTime(_progress),
-                                style: GoogleFonts.outfit(
-                                    fontSize: 12, color: Colors.white70)),
-                            Row(children: [
-                              _SmallBtn(
-                                icon: _isMuted
-                                    ? Icons.volume_off_rounded
-                                    : Icons.volume_up_rounded,
-                                onTap: () =>
-                                    setState(() => _isMuted = !_isMuted),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+
+          // ── Server selector + info panel ───────────────────────
+          Expanded(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Title + meta
+                  Text(title,
+                      style: GoogleFonts.outfit(
+                          fontSize: 17, fontWeight: FontWeight.w800,
+                          color: Colors.white),
+                      maxLines: 2, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 4),
+                  Row(children: [
+                    if (isTv && _season != null) ...[
+                      _MetaBadge(label: 'S$_season E$_episode',
+                          color: AppTheme.secondary),
+                      const SizedBox(width: 8),
+                    ],
+                    if (year.isNotEmpty) _MetaBadge(label: year),
+                    if (runtime.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      _MetaBadge(label: runtime),
+                    ],
+                  ]),
+                  const SizedBox(height: 18),
+
+                  // Server selector
+                  Row(children: [
+                    const Icon(Icons.dns_rounded,
+                        color: AppTheme.primary, size: 16),
+                    const SizedBox(width: 6),
+                    Text('Select Server',
+                        style: GoogleFonts.outfit(
+                            fontSize: 14, fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                  ]),
+                  const SizedBox(height: 10),
+                  Wrap(
+                    spacing: 10,
+                    runSpacing: 10,
+                    children: List.generate(kVideoServers.length, (i) {
+                      final s        = kVideoServers[i];
+                      final isActive = i == _serverIndex;
+                      return GestureDetector(
+                        onTap: () => _switchServer(i),
+                        child: AnimatedContainer(
+                          duration: const Duration(milliseconds: 200),
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 14, vertical: 10),
+                          decoration: BoxDecoration(
+                            color: isActive
+                                ? AppTheme.primary.withAlpha(30)
+                                : AppTheme.surfaceDark,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: isActive
+                                  ? AppTheme.primary
+                                  : const Color(0xFF2A2A3E),
+                              width: isActive ? 1.5 : 1,
+                            ),
+                          ),
+                          child: Row(mainAxisSize: MainAxisSize.min, children: [
+                            Text(s.icon,
+                                style: const TextStyle(fontSize: 16)),
+                            const SizedBox(width: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(s.label,
+                                    style: GoogleFonts.outfit(
+                                        fontSize: 13,
+                                        fontWeight: isActive
+                                            ? FontWeight.w700
+                                            : FontWeight.w500,
+                                        color: isActive
+                                            ? AppTheme.primary
+                                            : Colors.white)),
+                                if (isActive)
+                                  Text('Active',
+                                      style: GoogleFonts.outfit(
+                                          fontSize: 10,
+                                          color: AppTheme.primary
+                                              .withAlpha(180))),
+                              ],
+                            ),
+                            if (isActive) ...[
+                              const SizedBox(width: 8),
+                              Container(
+                                width: 8, height: 8,
+                                decoration: BoxDecoration(
+                                  color: AppTheme.primary,
+                                  shape: BoxShape.circle,
+                                  boxShadow: [BoxShadow(
+                                      color: AppTheme.primary.withAlpha(150),
+                                      blurRadius: 6)],
+                                ),
                               ),
-                              const SizedBox(width: 14),
-                              _SmallBtn(icon: Icons.subtitles_outlined,
-                                  onTap: () => showSubtitleSheet(context)),
-                              const SizedBox(width: 14),
-                              _SmallBtn(icon: Icons.settings_outlined,
-                                  onTap: () => _showSettings(context)),
-                              const SizedBox(width: 14),
-                              _SmallBtn(icon: Icons.more_vert_rounded,
-                                  onTap: () => showPlayerMoreSheet(context, widget.item)),
-                            ]),
-                            Text(_formatTime(1.0, total: true),
-                                style: GoogleFonts.outfit(
-                                    fontSize: 12, color: Colors.white70)),
+                            ],
                           ]),
+                        ),
+                      );
+                    }),
+                  ),
+
+                  const SizedBox(height: 20),
+                  const Divider(color: Color(0xFF2A2A3E)),
+                  const SizedBox(height: 12),
+
+                  // Action row
+                  Row(children: [
+                    Expanded(child: _ActionTile(
+                      icon: Icons.open_in_browser_rounded,
+                      label: 'Open in browser',
+                      onTap: () => openInBrowser(_currentUrl),
+                    )),
+                    const SizedBox(width: 10),
+                    Expanded(child: _ActionTile(
+                      icon: Icons.share_rounded,
+                      label: 'Share',
+                      onTap: () => shareItem(widget.item),
+                    )),
+                  ]),
+
+                  const SizedBox(height: 10),
+                  // Report bad stream
+                  GestureDetector(
+                    onTap: () => ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Report submitted. Thank you!',
+                            style: GoogleFonts.outfit()),
+                        backgroundColor: AppTheme.surfaceDark,
+                      ),
+                    ),
+                    child: Row(children: [
+                      const Icon(Icons.report_outlined,
+                          color: Color(0xFF666688), size: 14),
+                      const SizedBox(width: 6),
+                      Text('Report broken stream',
+                          style: GoogleFonts.outfit(
+                              fontSize: 12, color: const Color(0xFF666688))),
                     ]),
                   ),
-                ),
-              ]),
+                ],
+              ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  int get _totalSec {
-    final runtime = widget.item['runtime'] as String? ?? '120';
-    final match   = RegExp(r'(\d+)').firstMatch(runtime);
-    final min     = match != null ? int.tryParse(match.group(1)!) ?? 120 : 120;
-    return min * 60;
-  }
-
-  void _showSettings(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: const Color(0xFF1E1E2E),
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (sheetCtx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 40, height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(color: const Color(0xFF444466),
-                  borderRadius: BorderRadius.circular(2))),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
-            child: Text('Playback Settings', style: GoogleFonts.outfit(
-                fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+  PreferredSizeWidget _buildAppBar(
+    String title, bool isTv, String year, String runtime, VideoServer server) {
+    return AppBar(
+      backgroundColor: Colors.black,
+      elevation: 0,
+      leading: GestureDetector(
+        onTap: () => context.pop(),
+        child: Container(
+          margin: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: Colors.white.withAlpha(15),
+            borderRadius: BorderRadius.circular(10),
           ),
-          ListTile(
-            leading: const Icon(Icons.speed_rounded, color: Color(0xFF888899)),
-            title: Text('Playback speed', style: GoogleFonts.outfit(color: Colors.white)),
-            trailing: Text('1.0x', style: GoogleFonts.outfit(
-                color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            onTap: () { Navigator.pop(sheetCtx); showSpeedSheet(context); },
-          ),
-          ListTile(
-            leading: const Icon(Icons.hd_rounded, color: Color(0xFF888899)),
-            title: Text('Quality', style: GoogleFonts.outfit(color: Colors.white)),
-            trailing: Text('Auto', style: GoogleFonts.outfit(
-                color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            onTap: () { Navigator.pop(sheetCtx); showQualitySheet(context); },
-          ),
-          ListTile(
-            leading: const Icon(Icons.subtitles_rounded, color: Color(0xFF888899)),
-            title: Text('Subtitles', style: GoogleFonts.outfit(color: Colors.white)),
-            trailing: Text('Off', style: GoogleFonts.outfit(
-                color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            onTap: () { Navigator.pop(sheetCtx); showSubtitleSheet(context); },
-          ),
-          ListTile(
-            leading: const Icon(Icons.audiotrack_rounded, color: Color(0xFF888899)),
-            title: Text('Audio track', style: GoogleFonts.outfit(color: Colors.white)),
-            trailing: Text('Default', style: GoogleFonts.outfit(
-                color: AppTheme.primary, fontWeight: FontWeight.w600)),
-            onTap: () { Navigator.pop(sheetCtx); showAudioSheet(context); },
-          ),
-          const SizedBox(height: 8),
-        ]),
+          child: const Icon(Icons.arrow_back_ios_new_rounded,
+              color: Colors.white, size: 16),
+        ),
       ),
+      title: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(title,
+              style: GoogleFonts.outfit(
+                  fontSize: 14, fontWeight: FontWeight.w700,
+                  color: Colors.white),
+              maxLines: 1, overflow: TextOverflow.ellipsis),
+          Row(children: [
+            Text('${server.icon} ${server.label}',
+                style: GoogleFonts.outfit(
+                    fontSize: 10, color: AppTheme.primary,
+                    fontWeight: FontWeight.w600)),
+            if (_isLoading) ...[
+              const SizedBox(width: 6),
+              SizedBox(
+                width: 10, height: 10,
+                child: CircularProgressIndicator(
+                    color: AppTheme.primary, strokeWidth: 1.5),
+              ),
+            ],
+          ]),
+        ],
+      ),
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
+          onPressed: _reload,
+          padding: EdgeInsets.zero,
+        ),
+        IconButton(
+          icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
+          onPressed: () => showPlayerMoreSheet(context, widget.item),
+          padding: const EdgeInsets.only(right: 8),
+        ),
+      ],
     );
   }
 }
 
-class _BlackScreen extends StatelessWidget {
-  const _BlackScreen();
+// ─── Small widgets ────────────────────────────────────────────────────────────
+
+class _MetaBadge extends StatelessWidget {
+  final String label;
+  final Color  color;
+  const _MetaBadge({required this.label, this.color = const Color(0xFF444466)});
 
   @override
   Widget build(BuildContext context) => Container(
-    color: Colors.black,
-    child: const Center(child: Icon(Icons.play_circle_outline_rounded,
-        color: Colors.white24, size: 80)),
+    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+    decoration: BoxDecoration(
+      color: color.withAlpha(30),
+      borderRadius: BorderRadius.circular(6),
+      border: Border.all(color: color.withAlpha(80)),
+    ),
+    child: Text(label, style: GoogleFonts.outfit(
+        fontSize: 11, color: color, fontWeight: FontWeight.w600)),
   );
 }
 
-class _NavBtn extends StatelessWidget {
+class _PlayerBtn extends StatelessWidget {
+  final String label;
   final IconData icon;
-  final double   size;
   final VoidCallback onTap;
-  const _NavBtn({required this.icon, required this.onTap, this.size = 20});
+  const _PlayerBtn({required this.label, required this.icon, required this.onTap});
 
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
     child: Container(
-      width: 38, height: 38,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 9),
       decoration: BoxDecoration(
-          color: Colors.black.withAlpha(120), shape: BoxShape.circle),
-      child: Icon(icon, color: Colors.white, size: size),
+        color: AppTheme.primary.withAlpha(30),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: AppTheme.primary.withAlpha(80)),
+      ),
+      child: Row(mainAxisSize: MainAxisSize.min, children: [
+        Icon(icon, color: AppTheme.primary, size: 16),
+        const SizedBox(width: 6),
+        Text(label, style: GoogleFonts.outfit(
+            color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 13)),
+      ]),
     ),
   );
 }
 
-class _SmallBtn extends StatelessWidget {
+class _ActionTile extends StatelessWidget {
   final IconData icon;
+  final String   label;
   final VoidCallback onTap;
-  const _SmallBtn({required this.icon, required this.onTap});
+  const _ActionTile({required this.icon, required this.label, required this.onTap});
 
   @override
   Widget build(BuildContext context) => GestureDetector(
     onTap: onTap,
-    child: Icon(icon, color: Colors.white70, size: 20),
+    child: Container(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceDark,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFF2A2A3E)),
+      ),
+      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
+        Icon(icon, color: const Color(0xFF888899), size: 20),
+        const SizedBox(height: 5),
+        Text(label, style: GoogleFonts.outfit(
+            fontSize: 11, color: const Color(0xFF888899))),
+      ]),
+    ),
   );
 }
-
-

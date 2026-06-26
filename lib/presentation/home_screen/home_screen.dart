@@ -9,6 +9,7 @@ import './widgets/featured_banner_widget.dart';
 import './widgets/filter_chips_widget.dart';
 import './widgets/genre_chip_row_widget.dart';
 import './widgets/movie_grid_card_widget.dart';
+import './widgets/home_sections_widget.dart';
 import './widgets/section_header_widget.dart';
 import './widgets/top_rated_row_widget.dart';
 import './widgets/trending_card_widget.dart';
@@ -536,6 +537,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                       ),
                     ),
                   )),
+                  const SizedBox(height: 32),
+                  // ── Themed category sections with More button ──
+                  const HomeSectionsWidget(),
                   const SizedBox(height: 100),
                 ],
               ),

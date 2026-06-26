@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
 import '../presentation/actor_person_detail_screen/actor_person_detail_screen.dart';
+import '../presentation/category_section_screen/category_section_screen.dart';
 import '../presentation/home_screen/home_screen.dart';
 import '../presentation/movie_tv_show_detail_screen/movie_tv_show_detail_screen.dart';
 import '../presentation/search_screen/search_screen.dart';
@@ -15,6 +16,7 @@ class AppRoutes {
   static const String actorPersonDetailScreen = '/actor-person-detail-screen';
   static const String searchScreen = '/search';
   static const String seeAllScreen = '/see-all';
+  static const String categorySectionScreen = '/category-section';
 }
 
 final GoRouter appRouter = GoRouter(
@@ -56,6 +58,27 @@ final GoRouter appRouter = GoRouter(
         transitionsBuilder: (context, animation, secondaryAnimation, child) =>
             FadeTransition(opacity: animation, child: child),
       ),
+    ),
+    GoRoute(
+      path: AppRoutes.categorySectionScreen,
+      pageBuilder: (context, state) {
+        final extra = state.extra as Map<String, dynamic>;
+        return CustomTransitionPage(
+          key: state.pageKey,
+          child: CategorySectionScreen(
+            emoji: extra['emoji'] as String,
+            title: extra['title'] as String,
+            tmdbParams: (extra['tmdbParams'] as Map).cast<String, dynamic>(),
+          ),
+          transitionDuration: const Duration(milliseconds: 280),
+          transitionsBuilder: (context, animation, secondaryAnimation, child) =>
+              SlideTransition(
+                position: Tween<Offset>(begin: const Offset(0.04, 0), end: Offset.zero)
+                    .animate(CurvedAnimation(parent: animation, curve: Curves.easeOutCubic)),
+                child: FadeTransition(opacity: animation, child: child),
+              ),
+        );
+      },
     ),
     GoRoute(
       path: AppRoutes.seeAllScreen,

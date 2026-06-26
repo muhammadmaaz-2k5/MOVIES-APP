@@ -338,7 +338,7 @@ class _SectionCard extends StatelessWidget {
                   color: const Color(0xFFE6E6F0)),
             ),
             if ((item['year'] as String? ?? '').isNotEmpty)
-              Text(item['year'] as String!,
+              Text(item['year'] as String,
                   style: GoogleFonts.outfit(
                       fontSize: 10, color: const Color(0xFF888899))),
           ],

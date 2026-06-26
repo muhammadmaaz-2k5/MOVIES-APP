@@ -5,19 +5,21 @@ import 'package:go_router/go_router.dart';
 
 import './custom_icon_widget.dart';
 
-// V3 Liquid Glass — BackdropFilter blur + frosted surface + animated pill — LOCKED
-
 class _TabSpec {
   final String label;
+  final String emoji;
   final String icon;
   final String selectedIcon;
-  final int? branchIndex;
+  final int?   branchIndex; // null = push route
+  final String? pushRoute;
 
   const _TabSpec({
     required this.label,
+    required this.emoji,
     required this.icon,
     required this.selectedIcon,
     this.branchIndex,
+    this.pushRoute,
   });
 }
 
@@ -30,130 +32,140 @@ class AppNavigation extends StatefulWidget {
 }
 
 class _AppNavigationState extends State<AppNavigation> {
-  int _selectedVisualIndex = 0;
-
   static const List<_TabSpec> _tabs = [
     _TabSpec(
       label: 'Home',
+      emoji: '🏠',
       icon: 'home_outlined',
       selectedIcon: 'home_rounded',
       branchIndex: 0,
     ),
     _TabSpec(
+      label: 'Movies',
+      emoji: '🎬',
+      icon: 'movie_outlined',
+      selectedIcon: 'movie_rounded',
+      branchIndex: 1,
+    ),
+    _TabSpec(
+      label: 'TV Shows',
+      emoji: '📺',
+      icon: 'tv_outlined',
+      selectedIcon: 'tv_rounded',
+      branchIndex: 2,
+    ),
+    _TabSpec(
+      label: 'Anime',
+      emoji: '⛩️',
+      icon: 'auto_awesome_outlined',
+      selectedIcon: 'auto_awesome_rounded',
+      branchIndex: 3,
+    ),
+    _TabSpec(
       label: 'Search',
+      emoji: '🔍',
       icon: 'search_rounded',
       selectedIcon: 'search_rounded',
       branchIndex: null,
+      pushRoute: '/search',
     ),
-    _TabSpec(
-      label: 'Watchlist',
-      icon: 'bookmark_border_rounded',
-      selectedIcon: 'bookmark_rounded',
-      branchIndex: null,
-    ),
-    _TabSpec(
-      label: 'Profile',
-      icon: 'person_outline_rounded',
-      selectedIcon: 'person_rounded',
-      branchIndex: null,
-    ),
+  ];
+
+  // accent colours per tab
+  static const List<Color> _tabColors = [
+    Color(0xFF6C5CE7), // Home   — purple
+    Color(0xFF0984E3), // Movies — blue
+    Color(0xFF00B894), // TV     — teal
+    Color(0xFFFF6B9D), // Anime  — pink
+    Color(0xFFFDAA07), // Search — amber
   ];
 
   @override
   Widget build(BuildContext context) {
+    final currentBranch = widget.navigationShell.currentIndex;
+
     return ClipRRect(
       child: BackdropFilter(
         filter: ImageFilter.blur(sigmaX: 20, sigmaY: 20),
         child: Container(
-          height: 72 + MediaQuery.of(context).padding.bottom,
+          height: 68 + MediaQuery.of(context).padding.bottom,
           decoration: BoxDecoration(
-            color: const Color(0xFF1E1E2E).withAlpha(191),
+            color: const Color(0xFF1E1E2E).withAlpha(204),
             border: Border(
               top: BorderSide(color: Colors.white.withAlpha(20), width: 0.5),
             ),
           ),
           child: SafeArea(
             top: false,
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 8),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceAround,
-                children: List.generate(_tabs.length, (i) {
-                  final tab = _tabs[i];
-                  final isActive = i == _selectedVisualIndex;
-                  final isStub = tab.branchIndex == null;
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: List.generate(_tabs.length, (i) {
+                final tab      = _tabs[i];
+                final isBranch = tab.branchIndex != null;
+                final isActive = isBranch &&
+                    tab.branchIndex == currentBranch;
+                final color    = _tabColors[i];
 
-                  return GestureDetector(
+                return Expanded(
+                  child: GestureDetector(
                     onTap: () {
-                      if (isStub) {
-                        // Search tab: push the search screen
-                        if (tab.icon == 'search_rounded') {
-                          GoRouter.of(context).push('/search');
-                        }
+                      if (!isBranch) {
+                        GoRouter.of(context).push(tab.pushRoute!);
                         return;
                       }
-                      setState(() => _selectedVisualIndex = i);
                       widget.navigationShell.goBranch(
                         tab.branchIndex!,
                         initialLocation:
-                            tab.branchIndex ==
-                            widget.navigationShell.currentIndex,
+                            tab.branchIndex == currentBranch,
                       );
                     },
                     behavior: HitTestBehavior.opaque,
-                    child: AnimatedOpacity(
-                      duration: const Duration(milliseconds: 200),
-                      opacity: isStub ? 0.4 : 1.0,
-                      child: SizedBox(
-                        width: 64,
-                        child: Column(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            AnimatedContainer(
-                              duration: const Duration(milliseconds: 250),
-                              curve: Curves.easeOutCubic,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 16,
-                                vertical: 6,
-                              ),
-                              decoration: BoxDecoration(
-                                color: isActive
-                                    ? const Color(0xFF6C5CE7).withAlpha(64)
-                                    : Colors.transparent,
-                                borderRadius: BorderRadius.circular(20),
-                              ),
-                              child: CustomIconWidget(
-                                iconName: isActive
-                                    ? tab.selectedIcon
-                                    : tab.icon,
-                                color: isActive
-                                    ? const Color(0xFF6C5CE7)
-                                    : const Color(0xFF888899),
-                                size: 22,
-                              ),
+                    child: SizedBox(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          AnimatedContainer(
+                            duration: const Duration(milliseconds: 250),
+                            curve: Curves.easeOutCubic,
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 14, vertical: 5),
+                            decoration: BoxDecoration(
+                              color: isActive
+                                  ? color.withAlpha(50)
+                                  : Colors.transparent,
+                              borderRadius: BorderRadius.circular(20),
                             ),
-                            const SizedBox(height: 2),
-                            AnimatedDefaultTextStyle(
-                              duration: const Duration(milliseconds: 200),
-                              style: TextStyle(
-                                fontSize: 10,
-                                fontWeight: isActive
-                                    ? FontWeight.w600
-                                    : FontWeight.w400,
-                                color: isActive
-                                    ? const Color(0xFF6C5CE7)
-                                    : const Color(0xFF888899),
-                              ),
-                              child: Text(tab.label),
+                            child: CustomIconWidget(
+                              iconName: isActive
+                                  ? tab.selectedIcon
+                                  : tab.icon,
+                              color: isActive
+                                  ? color
+                                  : const Color(0xFF888899),
+                              size: 22,
                             ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(height: 2),
+                          AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            style: TextStyle(
+                              fontSize: 9,
+                              fontWeight: isActive
+                                  ? FontWeight.w700
+                                  : FontWeight.w400,
+                              color: isActive
+                                  ? color
+                                  : const Color(0xFF888899),
+                            ),
+                            child: Text(tab.label),
+                          ),
+                        ],
                       ),
                     ),
-                  );
-                }),
-              ),
+                  ),
+                );
+              }),
             ),
           ),
         ),

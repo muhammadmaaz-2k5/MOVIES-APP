@@ -518,6 +518,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                   const SizedBox(height: 12),
                   GenreChipRowWidget(genres: _genreList),
                   const SizedBox(height: 28),
+                  const SizedBox(height: 28),
                   // Top Rated
                   SectionHeaderWidget(
                     title: 'Top Rated All Time',
@@ -615,81 +616,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 }
 
-class _CategoryChipsRow extends StatelessWidget {
-  final List<String> categories;
-  final int selectedIndex;
-  final void Function(int) onSelected;
-
-  const _CategoryChipsRow({
-    required this.categories,
-    required this.selectedIndex,
-    required this.onSelected,
-  });
-
-  // Emoji/icon per category
-  static const Map<String, String> _icons = {
-    'All': '🎬',
-    'Punjabi': '🎵',
-    'Hollywood': '⭐',
-    'Bollywood': '💃',
-  };
-
-  @override
-  Widget build(BuildContext context) {
-    return SizedBox(
-      height: 38,
-      child: ListView.separated(
-        scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 16),
-        itemCount: categories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 8),
-        itemBuilder: (context, i) {
-          final cat = categories[i];
-          final selected = i == selectedIndex;
-          final emoji = _icons[cat] ?? '🎬';
-          return GestureDetector(
-            onTap: () => onSelected(i),
-            child: AnimatedContainer(
-              duration: const Duration(milliseconds: 200),
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: selected
-                    ? AppTheme.accent.withAlpha(220)
-                    : AppTheme.surfaceVariantDark,
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(
-                  color: selected
-                      ? AppTheme.accent
-                      : const Color(0xFF444466),
-                ),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(emoji, style: const TextStyle(fontSize: 13)),
-                  const SizedBox(width: 5),
-                  Text(
-                    cat,
-                    style: GoogleFonts.outfit(
-                      fontSize: 13,
-                      fontWeight: selected
-                          ? FontWeight.w700
-                          : FontWeight.w400,
-                      color: selected
-                          ? Colors.black
-                          : const Color(0xFF888899),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
-        },
-      ),
-    );
-  }
-}
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _GlassIconButton extends StatelessWidget {
   final String iconName;
@@ -772,6 +699,79 @@ class _GlassFilterButton extends StatelessWidget {
             ],
           ],
         ),
+      ),
+    );
+  }
+}
+
+// ─── Category chips ───────────────────────────────────────────────────────────
+
+class _CategoryChipsRow extends StatelessWidget {
+  final List<String> categories;
+  final int selectedIndex;
+  final void Function(int) onSelected;
+
+  const _CategoryChipsRow({
+    required this.categories,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  static const Map<String, String> _icons = {
+    'All': '🎬',
+    'Punjabi': '🎵',
+    'Hollywood': '⭐',
+    'Bollywood': '💃',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: categories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final cat = categories[i];
+          final selected = i == selectedIndex;
+          final emoji = _icons[cat] ?? '🎬';
+          return GestureDetector(
+            onTap: () => onSelected(i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppTheme.accent.withAlpha(220)
+                    : AppTheme.surfaceVariantDark,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: selected ? AppTheme.accent : const Color(0xFF444466),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 13)),
+                  const SizedBox(width: 5),
+                  Text(
+                    cat,
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight:
+                          selected ? FontWeight.w700 : FontWeight.w400,
+                      color: selected
+                          ? Colors.black
+                          : const Color(0xFF888899),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

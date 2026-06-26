@@ -4,7 +4,9 @@ import 'package:go_router/go_router.dart';
 import '../presentation/actor_person_detail_screen/actor_person_detail_screen.dart';
 import '../presentation/anime_screen/anime_screen.dart';
 import '../presentation/category_section_screen/category_section_screen.dart';
+import '../presentation/downloads_screen/downloads_screen.dart';
 import '../presentation/home_screen/home_screen.dart';
+import '../presentation/movie_player_screen/movie_player_screen.dart';
 import '../presentation/movies_screen/movies_screen.dart';
 import '../presentation/season_detail_screen/season_detail_screen.dart';
 import '../presentation/tv_shows_screen/tv_shows_screen.dart';
@@ -25,6 +27,8 @@ class AppRoutes {
   static const String seeAllScreen           = '/see-all';
   static const String categorySectionScreen  = '/category-section';
   static const String seasonDetailScreen     = '/season-detail';
+  static const String moviePlayerScreen      = '/movie-player';
+  static const String downloadsScreen        = '/downloads';
 }
 
 // Shared slide+fade transition
@@ -153,6 +157,21 @@ final GoRouter appRouter = GoRouter(
           season: state.extra as Map<String, dynamic>,
         ),
       ),
+    ),
+    GoRoute(
+      path: AppRoutes.moviePlayerScreen,
+      pageBuilder: (context, state) => CustomTransitionPage(
+        key: state.pageKey,
+        child: MoviePlayerScreen(item: state.extra as Map<String, dynamic>),
+        transitionDuration: const Duration(milliseconds: 300),
+        transitionsBuilder: (_, animation, __, child) =>
+            FadeTransition(opacity: animation, child: child),
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.downloadsScreen,
+      pageBuilder: (context, state) => _slidePage(
+          state, const DownloadsScreen()),
     ),
   ],
 );

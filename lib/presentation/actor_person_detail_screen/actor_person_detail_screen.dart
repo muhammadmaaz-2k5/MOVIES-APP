@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/app_export.dart';
+import '../../utils/app_actions.dart';
 import './widgets/actor_bio_widget.dart';
 import './widgets/actor_bottom_bar_widget.dart';
 import './widgets/actor_filmography_widget.dart';
@@ -270,6 +271,7 @@ class _ActorPersonDetailScreenState extends State<ActorPersonDetailScreen> {
                     isFollowing: _isFollowing,
                     onFollowToggle: () =>
                         setState(() => _isFollowing = !_isFollowing),
+                    person: _displayPerson,
                   ),
                 ),
               ],
@@ -311,7 +313,8 @@ class _ActorPersonDetailScreenState extends State<ActorPersonDetailScreen> {
                         ),
                       ),
                     ),
-                    _CircleBackButton(icon: Icons.share_rounded, onTap: () {}),
+                    _CircleBackButton(icon: Icons.share_rounded,
+                        onTap: () => sharePerson(person)),
                   ],
                 ),
               ),

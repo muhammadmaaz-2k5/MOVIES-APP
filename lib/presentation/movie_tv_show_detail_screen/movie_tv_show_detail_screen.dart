@@ -4,6 +4,7 @@ import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/app_export.dart';
+import '../../utils/app_actions.dart';
 import './widgets/detail_bottom_action_bar_widget.dart';
 import './widgets/detail_cast_section_widget.dart';
 import './widgets/detail_genre_chips_widget.dart';
@@ -456,6 +457,7 @@ class _MovieTvShowDetailScreenState extends State<MovieTvShowDetailScreen> {
                     isInWatchlist: _isInWatchlist,
                     onWatchlistToggle: () =>
                         setState(() => _isInWatchlist = !_isInWatchlist),
+                    item: item,
                   ),
                 ),
               ],
@@ -539,12 +541,11 @@ class _MovieTvShowDetailScreenState extends State<MovieTvShowDetailScreen> {
                         ),
                       ),
                     ),
-                    _CircleNavButton(icon: Icons.share_rounded, onTap: () {}),
+                    _CircleNavButton(icon: Icons.share_rounded,
+                        onTap: () => shareItem(item)),
                     const SizedBox(width: 8),
-                    _CircleNavButton(
-                      icon: Icons.more_vert_rounded,
-                      onTap: () {},
-                    ),
+                    _CircleNavButton(icon: Icons.more_vert_rounded,
+                        onTap: () => showMoreMenu(context, item)),
                   ],
                 ),
               ),

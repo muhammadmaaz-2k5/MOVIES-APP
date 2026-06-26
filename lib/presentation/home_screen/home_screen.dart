@@ -7,7 +7,6 @@ import '../../core/app_export.dart';
 import '../search_screen/filter_sheet.dart';
 import '../search_screen/search_filters.dart';
 import './widgets/featured_banner_widget.dart';
-import './widgets/filter_chips_widget.dart';
 import './widgets/movie_grid_card_widget.dart';
 import './widgets/home_sections_widget.dart';
 import './widgets/section_header_widget.dart';
@@ -450,6 +449,11 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         );
                         if (result != null) setState(() => _activeFilters = result);
                       },
+                    ),
+                    const SizedBox(width: 8),
+                    _GlassIconButton(
+                      iconName: 'download_rounded',
+                      onTap: () => context.push(AppRoutes.downloadsScreen),
                     ),
                     const SizedBox(width: 8),
                     _GlassIconButton(iconName: 'notifications_none_rounded', onTap: () {}),

@@ -274,7 +274,7 @@ class _MoviesScreenState extends State<MoviesScreen>
         GestureDetector(
           onTap: _openFilters,
           child: Container(
-            margin: const EdgeInsets.only(right: 16),
+            margin: const EdgeInsets.only(right: 8),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: active > 0 ? AppTheme.primary.withAlpha(30) : AppTheme.surfaceVariantDark,
@@ -297,6 +297,11 @@ class _MoviesScreenState extends State<MoviesScreen>
               ],
             ),
           ),
+        ),
+        IconButton(
+          icon: const Icon(Icons.download_rounded, color: Color(0xFF888899)),
+          onPressed: () => context.push(AppRoutes.downloadsScreen),
+          padding: const EdgeInsets.only(right: 12),
         ),
       ],
       bottom: PreferredSize(

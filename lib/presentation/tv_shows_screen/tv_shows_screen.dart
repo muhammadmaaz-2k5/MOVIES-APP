@@ -309,6 +309,11 @@ class _TvShowsScreenState extends State<TvShowsScreen>
             ]),
           ),
         ),
+        IconButton(
+          icon: const Icon(Icons.download_rounded, color: Color(0xFF888899)),
+          onPressed: () => context.push(AppRoutes.downloadsScreen),
+          padding: const EdgeInsets.only(right: 12),
+        ),
       ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),

@@ -1,17 +1,27 @@
 import 'dart:ui';
-import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../../../theme/app_theme.dart';
 
-class ActorBottomBarWidget extends StatelessWidget {
+import '../../../core/app_export.dart';
+import '../../../utils/app_actions.dart';
+
+class ActorBottomBarWidget extends StatefulWidget {
   final bool isFollowing;
   final VoidCallback onFollowToggle;
+  final Map<String, dynamic> person;
 
   const ActorBottomBarWidget({
     super.key,
     required this.isFollowing,
     required this.onFollowToggle,
+    required this.person,
   });
+
+  @override
+  State<ActorBottomBarWidget> createState() => _ActorBottomBarWidgetState();
+}
+
+class _ActorBottomBarWidgetState extends State<ActorBottomBarWidget> {
+  bool _isFavorite = false;
 
   @override
   Widget build(BuildContext context) {
@@ -28,39 +38,83 @@ class ActorBottomBarWidget extends StatelessWidget {
           child: SafeArea(
             top: false,
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+              padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
               child: Row(
                 children: [
-                  // Favorite button
-                  Container(
-                    width: 52,
-                    height: 52,
-                    decoration: BoxDecoration(
-                      color: AppTheme.surfaceDark,
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: const Color(0xFF444466)),
-                    ),
-                    child: const Icon(
-                      Icons.favorite_border_rounded,
-                      color: Color(0xFF888899),
-                      size: 22,
+                  // ── Favorite button ────────────────────────────────
+                  GestureDetector(
+                    onTap: () {
+                      setState(() => _isFavorite = !_isFavorite);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(
+                          content: Text(
+                            _isFavorite
+                                ? '❤️ Added to favourites'
+                                : 'Removed from favourites',
+                            style: GoogleFonts.outfit(),
+                          ),
+                          backgroundColor: AppTheme.surfaceDark,
+                          duration: const Duration(seconds: 2),
+                        ),
+                      );
+                    },
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 250),
+                      width: 52, height: 52,
+                      decoration: BoxDecoration(
+                        color: _isFavorite
+                            ? Colors.redAccent.withAlpha(30)
+                            : AppTheme.surfaceDark,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(
+                          color: _isFavorite
+                              ? Colors.redAccent.withAlpha(180)
+                              : const Color(0xFF444466),
+                        ),
+                      ),
+                      child: Icon(
+                        _isFavorite
+                            ? Icons.favorite_rounded
+                            : Icons.favorite_border_rounded,
+                        color: _isFavorite
+                            ? Colors.redAccent
+                            : const Color(0xFF888899),
+                        size: 22,
+                      ),
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  // Follow / Unfollow button
+                  const SizedBox(width: 10),
+
+                  // ── Share button ───────────────────────────────────
+                  GestureDetector(
+                    onTap: () => sharePerson(widget.person),
+                    child: Container(
+                      width: 52, height: 52,
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceDark,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: const Color(0xFF444466)),
+                      ),
+                      child: const Icon(Icons.share_rounded,
+                          color: Color(0xFF888899), size: 22),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+
+                  // ── Follow / Unfollow button ───────────────────────
                   Expanded(
                     child: GestureDetector(
-                      onTap: onFollowToggle,
+                      onTap: widget.onFollowToggle,
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 250),
                         curve: Curves.easeOutCubic,
                         height: 52,
                         decoration: BoxDecoration(
-                          color: isFollowing
+                          color: widget.isFollowing
                               ? AppTheme.surfaceDark
                               : AppTheme.primary,
                           borderRadius: BorderRadius.circular(14),
-                          border: isFollowing
+                          border: widget.isFollowing
                               ? Border.all(color: AppTheme.primary)
                               : null,
                         ),
@@ -69,21 +123,21 @@ class ActorBottomBarWidget extends StatelessWidget {
                             mainAxisAlignment: MainAxisAlignment.center,
                             children: [
                               Icon(
-                                isFollowing
+                                widget.isFollowing
                                     ? Icons.check_rounded
-                                    : Icons.add_rounded,
-                                color: isFollowing
+                                    : Icons.notifications_active_outlined,
+                                color: widget.isFollowing
                                     ? AppTheme.primary
                                     : Colors.white,
                                 size: 20,
                               ),
                               const SizedBox(width: 8),
                               Text(
-                                isFollowing ? 'Following' : 'Follow Actor',
+                                widget.isFollowing ? 'Following' : 'Follow',
                                 style: GoogleFonts.outfit(
                                   fontSize: 15,
                                   fontWeight: FontWeight.w700,
-                                  color: isFollowing
+                                  color: widget.isFollowing
                                       ? AppTheme.primary
                                       : Colors.white,
                                 ),

@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/app_export.dart';
+import '../../utils/app_actions.dart';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Season Detail Screen
@@ -207,6 +208,50 @@ class _PlayerAreaState extends State<_PlayerArea>
 
   void _toggleControls() => setState(() => _showControls = !_showControls);
 
+  void _showEpisodeSettings(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF1E1E2E),
+      shape: const RoundedRectangleBorder(
+          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+      builder: (_) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          Container(width: 40, height: 4,
+              margin: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(color: const Color(0xFF444466),
+                  borderRadius: BorderRadius.circular(2))),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+            child: Text('Episode Settings', style: GoogleFonts.outfit(
+                fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
+          ),
+          ListTile(
+            leading: const Icon(Icons.speed_rounded, color: Color(0xFF888899)),
+            title: Text('Playback speed', style: GoogleFonts.outfit(color: Colors.white)),
+            trailing: Text('1.0x', style: GoogleFonts.outfit(
+                color: AppTheme.primary, fontWeight: FontWeight.w600)),
+            onTap: () { Navigator.pop(_); showSpeedSheet(context); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.subtitles_rounded, color: Color(0xFF888899)),
+            title: Text('Subtitles', style: GoogleFonts.outfit(color: Colors.white)),
+            trailing: Text('Off', style: GoogleFonts.outfit(
+                color: AppTheme.primary, fontWeight: FontWeight.w600)),
+            onTap: () { Navigator.pop(_); showSubtitleSheet(context); },
+          ),
+          ListTile(
+            leading: const Icon(Icons.audiotrack_rounded, color: Color(0xFF888899)),
+            title: Text('Audio track', style: GoogleFonts.outfit(color: Colors.white)),
+            trailing: Text('Default', style: GoogleFonts.outfit(
+                color: AppTheme.primary, fontWeight: FontWeight.w600)),
+            onTap: () { Navigator.pop(_); showAudioSheet(context); },
+          ),
+          const SizedBox(height: 8),
+        ]),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final ep         = widget.episode;
@@ -411,11 +456,14 @@ class _ControlsOverlay extends StatelessWidget {
                   Text(_formatTime(progress),
                       style: GoogleFonts.outfit(fontSize: 11, color: Colors.white70)),
                   Row(children: [
-                    _SmallBtn(icon: Icons.subtitles_outlined, onTap: () {}),
+                    _SmallBtn(icon: Icons.subtitles_outlined,
+                        onTap: () => showSubtitleSheet(context)),
                     const SizedBox(width: 8),
-                    _SmallBtn(icon: Icons.settings_outlined,  onTap: () {}),
+                    _SmallBtn(icon: Icons.settings_outlined,
+                        onTap: () => _showEpisodeSettings(context)),
                     const SizedBox(width: 8),
-                    _SmallBtn(icon: Icons.volume_up_rounded,  onTap: () {}),
+                    _SmallBtn(icon: Icons.volume_up_rounded,
+                        onTap: () => showVolumeSheet(context)),
                   ]),
                   Text(_formatTime(1.0, total: true),
                       style: GoogleFonts.outfit(fontSize: 11, color: Colors.white70)),
@@ -762,7 +810,7 @@ class _EpisodeTile extends StatelessWidget {
             // ── Guest stars ──────────────────────────────────────
             if (guestStars.isNotEmpty)
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 0, 12, 10),
+                padding: const EdgeInsets.fromLTRB(12, 0, 12, 6),
                 child: Row(children: [
                   const Icon(Icons.person_outline_rounded,
                       color: Color(0xFF666688), size: 12),
@@ -775,6 +823,55 @@ class _EpisodeTile extends StatelessWidget {
                   ),
                 ]),
               ),
+
+            // ── Action row: Watch + Download ──────────────────────
+            Padding(
+              padding: const EdgeInsets.fromLTRB(12, 4, 12, 10),
+              child: Row(children: [
+                // Watch button
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => onTap(),
+                    child: Container(
+                      height: 34,
+                      decoration: BoxDecoration(
+                        color: isSelected
+                            ? AppTheme.primary
+                            : AppTheme.surfaceVariantDark,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(
+                            isSelected
+                                ? Icons.pause_rounded
+                                : Icons.play_arrow_rounded,
+                            color: Colors.white, size: 16),
+                          const SizedBox(width: 4),
+                          Text(isSelected ? 'Playing' : 'Watch',
+                              style: GoogleFonts.outfit(
+                                  fontSize: 12, fontWeight: FontWeight.w600,
+                                  color: Colors.white)),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                // Download button
+                SizedBox(
+                  width: 34, height: 34,
+                  child: DownloadButton(
+                    tmdbId:    episode['id'] as int? ?? 0,
+                    title:     name,
+                    type:      'tv_episode',
+                    posterUrl: stillUrl.isNotEmpty ? stillUrl : '',
+                    subtitle:  'E$epNum',
+                  ),
+                ),
+              ]),
+            ),
           ],
         ),
       ),

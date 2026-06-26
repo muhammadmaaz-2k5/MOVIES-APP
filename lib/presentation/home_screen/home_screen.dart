@@ -3,6 +3,8 @@ import 'dart:ui';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/app_export.dart';
+import '../search_screen/filter_sheet.dart';
+import '../search_screen/search_filters.dart';
 import './widgets/featured_banner_widget.dart';
 import './widgets/filter_chips_widget.dart';
 import './widgets/genre_chip_row_widget.dart';
@@ -23,6 +25,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   int _selectedFilter = 0;
   final ScrollController _scrollController = ScrollController();
   bool _isAppBarBlurred = false;
+  SearchFilters _activeFilters = const SearchFilters();
 
   // TODO: Replace with TMDB API call — GET /trending/all/week
   // Authorization: Bearer eyJhbGciOiJIUzI1NiJ9...
@@ -531,6 +534,23 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     const Spacer(),
                     _GlassIconButton(iconName: 'search_rounded', onTap: () => context.push(AppRoutes.searchScreen)),
                     const SizedBox(width: 8),
+                    _GlassFilterButton(
+                      activeCount: _activeFilters.activeCount,
+                      onTap: () async {
+                        final result =
+                            await showModalBottomSheet<SearchFilters>(
+                          context: context,
+                          isScrollControlled: true,
+                          backgroundColor: Colors.transparent,
+                          builder: (_) =>
+                              FilterSheet(current: _activeFilters),
+                        );
+                        if (result != null) {
+                          setState(() => _activeFilters = result);
+                        }
+                      },
+                    ),
+                    const SizedBox(width: 8),
                     _GlassIconButton(
                       iconName: 'notifications_none_rounded',
                       onTap: () {},
@@ -568,6 +588,64 @@ class _GlassIconButton extends StatelessWidget {
           iconName: iconName,
           color: Colors.white,
           size: 20,
+        ),
+      ),
+    );
+  }
+}
+
+class _GlassFilterButton extends StatelessWidget {
+  final int activeCount;
+  final VoidCallback onTap;
+
+  const _GlassFilterButton({required this.activeCount, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isActive = activeCount > 0;
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        height: 38,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
+        decoration: BoxDecoration(
+          color: isActive
+              ? AppTheme.primary.withAlpha(40)
+              : Colors.white.withAlpha(20),
+          borderRadius: BorderRadius.circular(12),
+          border: Border.all(
+            color: isActive
+                ? AppTheme.primary.withAlpha(120)
+                : Colors.white.withAlpha(26),
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.tune_rounded,
+                size: 16,
+                color: isActive ? AppTheme.primary : Colors.white),
+            if (isActive) ...[
+              const SizedBox(width: 4),
+              Container(
+                width: 18,
+                height: 18,
+                decoration: BoxDecoration(
+                  color: AppTheme.primary,
+                  shape: BoxShape.circle,
+                ),
+                child: Center(
+                  child: Text(
+                    '$activeCount',
+                    style: const TextStyle(
+                        fontSize: 10,
+                        fontWeight: FontWeight.w700,
+                        color: Colors.white),
+                  ),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );

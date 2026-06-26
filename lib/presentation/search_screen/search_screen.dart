@@ -4,6 +4,8 @@ import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/app_export.dart';
+import 'filter_sheet.dart';
+import 'search_filters.dart';
 
 class SearchScreen extends StatefulWidget {
   const SearchScreen({super.key});
@@ -20,7 +22,8 @@ class _SearchScreenState extends State<SearchScreen> {
   bool _isLoading = false;
   String _query = '';
   List<Map<String, dynamic>> _results = [];
-  String _selectedType = 'all'; // 'all' | 'movie' | 'tv' | 'person'
+  String _selectedType = 'all';
+  SearchFilters _filters = const SearchFilters();
 
   static const String _tmdbBase = 'https://api.themoviedb.org/3';
   static const String _imageBase = 'https://image.tmdb.org/t/p';
@@ -29,19 +32,19 @@ class _SearchScreenState extends State<SearchScreen> {
 
   late final Dio _dio;
 
-  static const List<_FilterOption> _filters = [
-    _FilterOption(label: 'All', value: 'all'),
-    _FilterOption(label: 'Movies', value: 'movie'),
-    _FilterOption(label: 'TV Shows', value: 'tv'),
-    _FilterOption(label: 'People', value: 'person'),
+  static const List<_TypeOption> _typeFilters = [
+    _TypeOption(label: 'All', value: 'all'),
+    _TypeOption(label: 'Movies', value: 'movie'),
+    _TypeOption(label: 'TV Shows', value: 'tv'),
+    _TypeOption(label: 'People', value: 'person'),
   ];
 
   @override
   void initState() {
     super.initState();
     _dio = Dio(BaseOptions(headers: {'Authorization': 'Bearer $_bearerToken'}));
-    // Auto-focus
-    WidgetsBinding.instance.addPostFrameCallback((_) => _focusNode.requestFocus());
+    WidgetsBinding.instance
+        .addPostFrameCallback((_) => _focusNode.requestFocus());
   }
 
   @override
@@ -56,37 +59,75 @@ class _SearchScreenState extends State<SearchScreen> {
   void _onQueryChanged(String value) {
     _debounce?.cancel();
     if (value.trim().isEmpty) {
-      setState(() { _query = ''; _results = []; _isLoading = false; });
+      setState(() {
+        _query = '';
+        _results = [];
+        _isLoading = false;
+      });
       return;
     }
     setState(() => _isLoading = true);
-    _debounce = Timer(const Duration(milliseconds: 400), () => _search(value.trim()));
+    _debounce = Timer(
+        const Duration(milliseconds: 400), () => _search(value.trim()));
+  }
+
+  Map<String, dynamic> _buildQueryParams(String q) {
+    final params = <String, dynamic>{
+      'query': q,
+      'include_adult': false,
+      'page': 1,
+    };
+
+    // Genre
+    if (_filters.genre != 'All') {
+      final gid = SearchFilters.genreIds[_filters.genre];
+      if (gid != null) params['with_genres'] = gid;
+    }
+    // Country
+    if (_filters.country != 'All' && _filters.country != 'Other') {
+      final code = SearchFilters.countryCodes[_filters.country];
+      if (code != null) params['region'] = code;
+    }
+    // Language
+    if (_filters.language != 'All') {
+      final code = SearchFilters.languageCodes[_filters.language];
+      if (code != null) params['language'] = code;
+    }
+    // Year
+    if (_filters.year != 'All' && _filters.year != 'Other') {
+      if (!_filters.year.contains('s')) {
+        params['year'] = _filters.year;
+      }
+    }
+    return params;
   }
 
   Future<void> _search(String q) async {
-    setState(() { _query = q; _isLoading = true; });
+    setState(() {
+      _query = q;
+      _isLoading = true;
+    });
     try {
-      final endpoint = _selectedType == 'all' ? 'search/multi' : 'search/$_selectedType';
-      final resp = await _dio.get('$_tmdbBase/$endpoint', queryParameters: {
-        'query': q,
-        'include_adult': false,
-        'page': 1,
-      });
-      final items = (resp.data['results'] as List? ?? []).map((r) {
+      final endpoint =
+          _selectedType == 'all' ? 'search/multi' : 'search/$_selectedType';
+      final resp = await _dio.get('$_tmdbBase/$endpoint',
+          queryParameters: _buildQueryParams(q));
+
+      var items = (resp.data['results'] as List? ?? []).map((r) {
         final mediaType = r['media_type'] as String? ?? _selectedType;
         final isPerson = mediaType == 'person';
-        final posterPath = isPerson
-            ? r['profile_path'] as String?
-            : r['poster_path'] as String?;
+        final posterPath =
+            isPerson ? r['profile_path'] as String? : r['poster_path'] as String?;
         final title = r['title'] ?? r['name'] ?? 'Unknown';
         final releaseDate = r['release_date'] ?? r['first_air_date'] ?? '';
-        final year = releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
-        return {
+        final year =
+            releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
+        return <String, dynamic>{
           'id': r['id'],
           'title': title,
-          'type': mediaType == 'person' ? 'person' : (mediaType == 'tv' ? 'tv' : 'movie'),
+          'type': isPerson ? 'person' : (mediaType == 'tv' ? 'tv' : 'movie'),
           'posterUrl': posterPath != null ? '$_imageBase/w342$posterPath' : '',
-          'posterSemanticLabel': 'Search result poster for $title',
+          'posterSemanticLabel': 'Search result for $title',
           'rating': (r['vote_average'] as num?)?.toDouble() ?? 0.0,
           'year': year,
           'genres': <String>[],
@@ -94,8 +135,9 @@ class _SearchScreenState extends State<SearchScreen> {
           'overview': r['overview'] ?? '',
           'voteCount': r['vote_count'] ?? 0,
           'popularity': (r['popularity'] as num?)?.toDouble() ?? 0.0,
-          // person-specific
-          'photoUrl': isPerson && posterPath != null ? '$_imageBase/w185$posterPath' : '',
+          'photoUrl': isPerson && posterPath != null
+              ? '$_imageBase/w185$posterPath'
+              : '',
           'semanticLabel': 'Photo of $title',
           'department': r['known_for_department'] ?? 'Acting',
           'biography': '',
@@ -103,15 +145,50 @@ class _SearchScreenState extends State<SearchScreen> {
         };
       }).toList();
 
-      if (mounted) setState(() { _results = items.cast<Map<String, dynamic>>(); _isLoading = false; });
+      // Client-side sort
+      switch (_filters.sortBy) {
+        case 'Rating':
+          items.sort((a, b) => ((b['rating'] as double)
+              .compareTo(a['rating'] as double)));
+        case 'Latest':
+          items.sort(
+              (a, b) => (b['year'] as String).compareTo(a['year'] as String));
+        default: // Hottest = popularity (default TMDB order)
+          items.sort((a, b) =>
+              ((b['popularity'] as double)
+                  .compareTo(a['popularity'] as double)));
+      }
+
+      if (mounted) {
+        setState(() {
+          _results = items;
+          _isLoading = false;
+        });
+      }
     } catch (_) {
       if (mounted) setState(() => _isLoading = false);
     }
   }
 
-  void _onFilterChanged(String type) {
-    setState(() { _selectedType = type; _results = []; });
+  void _onTypeChanged(String type) {
+    setState(() {
+      _selectedType = type;
+      _results = [];
+    });
     if (_query.isNotEmpty) _search(_query);
+  }
+
+  Future<void> _openFilterSheet() async {
+    final result = await showModalBottomSheet<SearchFilters>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => FilterSheet(current: _filters),
+    );
+    if (result != null) {
+      setState(() => _filters = result);
+      if (_query.isNotEmpty) _search(_query);
+    }
   }
 
   void _onResultTap(Map<String, dynamic> item) {
@@ -131,7 +208,7 @@ class _SearchScreenState extends State<SearchScreen> {
         child: Column(
           children: [
             _buildSearchBar(),
-            _buildFilterChips(),
+            _buildTypeAndFilterRow(),
             Expanded(child: _buildBody()),
           ],
         ),
@@ -155,18 +232,21 @@ class _SearchScreenState extends State<SearchScreen> {
               child: Row(
                 children: [
                   const SizedBox(width: 14),
-                  const Icon(Icons.search_rounded, color: Color(0xFF888899), size: 20),
+                  const Icon(Icons.search_rounded,
+                      color: Color(0xFF888899), size: 20),
                   const SizedBox(width: 10),
                   Expanded(
                     child: TextField(
                       controller: _controller,
                       focusNode: _focusNode,
                       onChanged: _onQueryChanged,
-                      style: GoogleFonts.outfit(color: Colors.white, fontSize: 15),
+                      style: GoogleFonts.outfit(
+                          color: Colors.white, fontSize: 15),
                       cursorColor: AppTheme.primary,
                       decoration: InputDecoration(
                         hintText: 'Search movies, shows, people…',
-                        hintStyle: GoogleFonts.outfit(color: const Color(0xFF888899), fontSize: 15),
+                        hintStyle: GoogleFonts.outfit(
+                            color: const Color(0xFF888899), fontSize: 15),
                         border: InputBorder.none,
                         isDense: true,
                         contentPadding: EdgeInsets.zero,
@@ -181,7 +261,8 @@ class _SearchScreenState extends State<SearchScreen> {
                       },
                       child: const Padding(
                         padding: EdgeInsets.symmetric(horizontal: 12),
-                        child: Icon(Icons.close_rounded, color: Color(0xFF888899), size: 18),
+                        child: Icon(Icons.close_rounded,
+                            color: Color(0xFF888899), size: 18),
                       ),
                     ),
                 ],
@@ -191,56 +272,110 @@ class _SearchScreenState extends State<SearchScreen> {
           const SizedBox(width: 12),
           GestureDetector(
             onTap: () => context.pop(),
-            child: Text(
-              'Cancel',
-              style: GoogleFonts.outfit(
-                color: AppTheme.primary,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
+            child: Text('Cancel',
+                style: GoogleFonts.outfit(
+                    color: AppTheme.primary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600)),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildFilterChips() {
+  Widget _buildTypeAndFilterRow() {
+    final activeCount = _filters.activeCount;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: const EdgeInsets.only(top: 10, bottom: 4),
       child: SizedBox(
-        height: 36,
-        child: ListView.separated(
-          scrollDirection: Axis.horizontal,
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          itemCount: _filters.length,
-          separatorBuilder: (_, __) => const SizedBox(width: 8),
-          itemBuilder: (context, i) {
-            final f = _filters[i];
-            final selected = _selectedType == f.value;
-            return GestureDetector(
-              onTap: () => _onFilterChanged(f.value),
-              child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+        height: 38,
+        child: Row(
+          children: [
+            Expanded(
+              child: ListView.separated(
+                scrollDirection: Axis.horizontal,
+                padding: const EdgeInsets.only(left: 16),
+                itemCount: _typeFilters.length,
+                separatorBuilder: (_, __) => const SizedBox(width: 8),
+                itemBuilder: (context, i) {
+                  final f = _typeFilters[i];
+                  final selected = _selectedType == f.value;
+                  return GestureDetector(
+                    onTap: () => _onTypeChanged(f.value),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 16, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: selected
+                            ? AppTheme.primary
+                            : AppTheme.surfaceVariantDark,
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(
+                          color: selected
+                              ? AppTheme.primary
+                              : const Color(0xFF444466),
+                        ),
+                      ),
+                      child: Text(f.label,
+                          style: GoogleFonts.outfit(
+                            fontSize: 13,
+                            fontWeight: selected
+                                ? FontWeight.w600
+                                : FontWeight.w400,
+                            color: selected
+                                ? Colors.white
+                                : const Color(0xFF888899),
+                          )),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(width: 8),
+            // Filter button
+            GestureDetector(
+              onTap: _openFilterSheet,
+              child: Container(
+                margin: const EdgeInsets.only(right: 16),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
                 decoration: BoxDecoration(
-                  color: selected ? AppTheme.primary : AppTheme.surfaceVariantDark,
+                  color: activeCount > 0
+                      ? AppTheme.primary.withAlpha(30)
+                      : AppTheme.surfaceVariantDark,
                   borderRadius: BorderRadius.circular(20),
                   border: Border.all(
-                    color: selected ? AppTheme.primary : const Color(0xFF444466),
+                    color: activeCount > 0
+                        ? AppTheme.primary
+                        : const Color(0xFF444466),
                   ),
                 ),
-                child: Text(
-                  f.label,
-                  style: GoogleFonts.outfit(
-                    fontSize: 13,
-                    fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
-                    color: selected ? Colors.white : const Color(0xFF888899),
-                  ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.tune_rounded,
+                        size: 15,
+                        color: activeCount > 0
+                            ? AppTheme.primary
+                            : const Color(0xFF888899)),
+                    const SizedBox(width: 5),
+                    Text(
+                      activeCount > 0 ? 'Filters ($activeCount)' : 'Filters',
+                      style: GoogleFonts.outfit(
+                          fontSize: 13,
+                          fontWeight: activeCount > 0
+                              ? FontWeight.w600
+                              : FontWeight.w400,
+                          color: activeCount > 0
+                              ? AppTheme.primary
+                              : const Color(0xFF888899)),
+                    ),
+                  ],
                 ),
               ),
-            );
-          },
+            ),
+          ],
         ),
       ),
     );
@@ -253,77 +388,164 @@ class _SearchScreenState extends State<SearchScreen> {
     return _buildResults();
   }
 
-  Widget _buildEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.search_rounded, color: const Color(0xFF444466), size: 64),
-          const SizedBox(height: 16),
-          Text(
-            'Search for anything',
-            style: GoogleFonts.outfit(fontSize: 18, fontWeight: FontWeight.w600, color: Colors.white),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Movies, TV shows, actors and more',
-            style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF888899)),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildEmptyState() => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.search_rounded,
+                color: const Color(0xFF444466), size: 64),
+            const SizedBox(height: 16),
+            Text('Search for anything',
+                style: GoogleFonts.outfit(
+                    fontSize: 18,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white)),
+            const SizedBox(height: 8),
+            Text('Movies, TV shows, actors and more',
+                style: GoogleFonts.outfit(
+                    fontSize: 14, color: const Color(0xFF888899))),
+            if (!_filters.isDefault) ...[
+              const SizedBox(height: 16),
+              _ActiveFiltersRow(filters: _filters,
+                  onClear: () => setState(() => _filters = const SearchFilters())),
+            ],
+          ],
+        ),
+      );
 
-  Widget _buildLoadingState() {
-    return Center(
-      child: CircularProgressIndicator(color: AppTheme.primary),
-    );
-  }
+  Widget _buildLoadingState() =>
+      Center(child: CircularProgressIndicator(color: AppTheme.primary));
 
-  Widget _buildNoResults() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.sentiment_dissatisfied_rounded, color: const Color(0xFF444466), size: 64),
-          const SizedBox(height: 16),
-          Text(
-            'No results for "$_query"',
-            style: GoogleFonts.outfit(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Try a different search term',
-            style: GoogleFonts.outfit(fontSize: 14, color: const Color(0xFF888899)),
-          ),
-        ],
-      ),
-    );
-  }
+  Widget _buildNoResults() => Center(
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.sentiment_dissatisfied_rounded,
+                color: const Color(0xFF444466), size: 64),
+            const SizedBox(height: 16),
+            Text('No results for "$_query"',
+                style: GoogleFonts.outfit(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white)),
+            const SizedBox(height: 8),
+            Text('Try a different search or adjust filters',
+                style: GoogleFonts.outfit(
+                    fontSize: 14, color: const Color(0xFF888899))),
+            if (!_filters.isDefault) ...[
+              const SizedBox(height: 16),
+              GestureDetector(
+                onTap: () {
+                  setState(() => _filters = const SearchFilters());
+                  _search(_query);
+                },
+                child: Text('Clear filters',
+                    style: GoogleFonts.outfit(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                        color: AppTheme.primary)),
+              ),
+            ],
+          ],
+        ),
+      );
 
   Widget _buildResults() {
-    return ListView.separated(
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 24),
-      itemCount: _results.length,
-      separatorBuilder: (_, __) => const SizedBox(height: 12),
-      itemBuilder: (context, i) => _SearchResultTile(
-        item: _results[i],
-        onTap: () => _onResultTap(_results[i]),
+    return Column(
+      children: [
+        if (!_filters.isDefault)
+          _ActiveFiltersRow(
+            filters: _filters,
+            onClear: () {
+              setState(() => _filters = const SearchFilters());
+              _search(_query);
+            },
+          ),
+        Expanded(
+          child: ListView.separated(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+            itemCount: _results.length,
+            separatorBuilder: (_, __) => const SizedBox(height: 10),
+            itemBuilder: (context, i) => _SearchResultTile(
+              item: _results[i],
+              onTap: () => _onResultTap(_results[i]),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+// ─── Active filters summary strip ────────────────────────────────────────────
+
+class _ActiveFiltersRow extends StatelessWidget {
+  final SearchFilters filters;
+  final VoidCallback onClear;
+  const _ActiveFiltersRow({required this.filters, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <String>[];
+    if (filters.genre != 'All') chips.add(filters.genre);
+    if (filters.country != 'All') chips.add(filters.country);
+    if (filters.year != 'All') chips.add(filters.year);
+    if (filters.language != 'All') chips.add(filters.language);
+    if (filters.sortBy != 'Hottest') chips.add('Sort: ${filters.sortBy}');
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      child: Row(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: chips.map((c) => Container(
+                  margin: const EdgeInsets.only(right: 6),
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withAlpha(30),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppTheme.primary.withAlpha(80)),
+                  ),
+                  child: Text(c,
+                      style: GoogleFonts.outfit(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w500,
+                          color: AppTheme.primary)),
+                )).toList(),
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: onClear,
+            child: Padding(
+              padding: const EdgeInsets.only(left: 8),
+              child: Text('Clear',
+                  style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFF888899))),
+            ),
+          ),
+        ],
       ),
     );
   }
 }
 
-class _FilterOption {
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+class _TypeOption {
   final String label;
   final String value;
-  const _FilterOption({required this.label, required this.value});
+  const _TypeOption({required this.label, required this.value});
 }
 
 class _SearchResultTile extends StatelessWidget {
   final Map<String, dynamic> item;
   final VoidCallback onTap;
-
   const _SearchResultTile({required this.item, required this.onTap});
 
   @override
@@ -350,13 +572,12 @@ class _SearchResultTile extends StatelessWidget {
             ClipRRect(
               borderRadius: BorderRadius.circular(isPerson ? 28 : 8),
               child: imageUrl.isNotEmpty
-                  ? Image.network(
-                      imageUrl,
+                  ? Image.network(imageUrl,
                       width: isPerson ? 56 : 52,
                       height: isPerson ? 56 : 74,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => _Placeholder(isPerson: isPerson),
-                    )
+                      errorBuilder: (_, __, ___) =>
+                          _Placeholder(isPerson: isPerson))
                   : _Placeholder(isPerson: isPerson),
             ),
             const SizedBox(width: 14),
@@ -364,50 +585,50 @@ class _SearchResultTile extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(
-                    item['title'] as String? ?? '',
-                    style: GoogleFonts.outfit(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: Colors.white,
-                    ),
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                  ),
+                  Text(item['title'] as String? ?? '',
+                      style: GoogleFonts.outfit(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                          color: Colors.white),
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis),
                   const SizedBox(height: 4),
-                  Row(
-                    children: [
-                      _TypeBadge(type: type),
-                      if (year.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        Text(year, style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF888899))),
-                      ],
+                  Row(children: [
+                    _TypeBadge(type: type),
+                    if (year.isNotEmpty) ...[
+                      const SizedBox(width: 8),
+                      Text(year,
+                          style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              color: const Color(0xFF888899))),
                     ],
-                  ),
+                  ]),
                   if (!isPerson && rating > 0) ...[
                     const SizedBox(height: 4),
-                    Row(
-                      children: [
-                        Icon(Icons.star_rounded, color: AppTheme.accent, size: 13),
-                        const SizedBox(width: 3),
-                        Text(
-                          rating.toStringAsFixed(1),
-                          style: GoogleFonts.outfit(fontSize: 12, fontWeight: FontWeight.w600, color: AppTheme.accent),
-                        ),
-                      ],
-                    ),
+                    Row(children: [
+                      Icon(Icons.star_rounded,
+                          color: AppTheme.accent, size: 13),
+                      const SizedBox(width: 3),
+                      Text(rating.toStringAsFixed(1),
+                          style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w600,
+                              color: AppTheme.accent)),
+                    ]),
                   ],
-                  if (isPerson && (item['department'] as String? ?? '').isNotEmpty) ...[
+                  if (isPerson &&
+                      (item['department'] as String? ?? '').isNotEmpty) ...[
                     const SizedBox(height: 4),
-                    Text(
-                      item['department'] as String,
-                      style: GoogleFonts.outfit(fontSize: 12, color: const Color(0xFF888899)),
-                    ),
+                    Text(item['department'] as String,
+                        style: GoogleFonts.outfit(
+                            fontSize: 12,
+                            color: const Color(0xFF888899))),
                   ],
                 ],
               ),
             ),
-            const Icon(Icons.chevron_right_rounded, color: Color(0xFF444466), size: 20),
+            const Icon(Icons.chevron_right_rounded,
+                color: Color(0xFF444466), size: 20),
           ],
         ),
       ),
@@ -420,18 +641,13 @@ class _Placeholder extends StatelessWidget {
   const _Placeholder({required this.isPerson});
 
   @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: isPerson ? 56 : 52,
-      height: isPerson ? 56 : 74,
-      color: AppTheme.surfaceVariantDark,
-      child: Icon(
-        isPerson ? Icons.person_rounded : Icons.movie_rounded,
-        color: Colors.white24,
-        size: 24,
-      ),
-    );
-  }
+  Widget build(BuildContext context) => Container(
+        width: isPerson ? 56 : 52,
+        height: isPerson ? 56 : 74,
+        color: AppTheme.surfaceVariantDark,
+        child: Icon(isPerson ? Icons.person_rounded : Icons.movie_rounded,
+            color: Colors.white24, size: 24),
+      );
 }
 
 class _TypeBadge extends StatelessWidget {
@@ -459,8 +675,11 @@ class _TypeBadge extends StatelessWidget {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
-      child: Text(label, style: GoogleFonts.outfit(fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+      child: Text(label,
+          style: GoogleFonts.outfit(
+              fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
     );
   }
 }

@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
 
 import '../../core/app_export.dart';
+import '../search_screen/search_filters.dart';
+import '../shared/media_filter_sheet.dart';
 
 class TvShowsScreen extends StatefulWidget {
   const TvShowsScreen({super.key});
@@ -20,6 +22,9 @@ class _TvShowsScreenState extends State<TvShowsScreen>
   late final Dio _dio;
   late final TabController _tabController;
   final ScrollController _scrollController = ScrollController();
+
+  // Active filters
+  SearchFilters _filters = const SearchFilters();
 
   static const List<_TvTab> _tabs = [
     _TvTab(label: 'All', sortBy: 'popularity.desc', genreId: null),
@@ -87,18 +92,12 @@ class _TvShowsScreenState extends State<TvShowsScreen>
 
     try {
       Response resp;
-      if (tab.trending) {
+      if (tab.trending && _filters.isDefault) {
         resp = await _dio.get('$_tmdbBase/trending/tv/week',
             queryParameters: {'page': page});
       } else {
-        final params = <String, dynamic>{
-          'sort_by': tab.sortBy,
-          'page': page,
-          'include_adult': false,
-          'vote_count.gte': tab.sortBy.contains('vote_average') ? 200 : 0,
-        };
-        if (tab.genreId != null) params['with_genres'] = tab.genreId;
-        resp = await _dio.get('$_tmdbBase/discover/tv', queryParameters: params);
+        resp = await _dio.get('$_tmdbBase/discover/tv',
+            queryParameters: _buildParams(tabIdx, page));
       }
 
       final results = (resp.data['results'] as List? ?? []);
@@ -155,6 +154,83 @@ class _TvShowsScreenState extends State<TvShowsScreen>
     await _fetchPage(_currentTab, 1);
   }
 
+  Map<String, dynamic> _buildParams(int tabIdx, int page) {
+    final tab    = _tabs[tabIdx];
+    final params = <String, dynamic>{
+      'page': page, 'include_adult': false,
+    };
+
+    // sort
+    switch (_filters.sortBy) {
+      case 'Rating':
+        params['sort_by'] = 'vote_average.desc';
+        params['vote_count.gte'] = 200;
+      case 'Latest':
+        params['sort_by'] = 'first_air_date.desc';
+      default:
+        params['sort_by'] = tab.sortBy;
+        if (tab.sortBy.contains('vote_average')) params['vote_count.gte'] = 200;
+    }
+
+    // genre: tab overrides filter genre when tab has own genre
+    if (tab.genreId != null) {
+      params['with_genres'] = tab.genreId;
+    } else if (_filters.genre != 'All') {
+      final gid = tvGenreIdForName(_filters.genre)
+          ?? SearchFilters.genreIds[_filters.genre];
+      if (gid != null) params['with_genres'] = gid;
+    }
+
+    // country
+    if (_filters.country != 'All' && _filters.country != 'Other') {
+      final code = SearchFilters.countryCodes[_filters.country];
+      if (code != null) params['with_origin_country'] = code;
+    }
+
+    // language
+    if (_filters.language != 'All') {
+      final code = SearchFilters.languageCodes[_filters.language];
+      if (code != null) params['with_original_language'] = code;
+    }
+
+    // year
+    final yr = _filters.year;
+    if (yr != 'All' && yr != 'Other') {
+      if (yr.endsWith('s')) {
+        final decade = int.tryParse(yr.replaceAll('s', ''));
+        if (decade != null) {
+          params['first_air_date.gte'] = '$decade-01-01';
+          params['first_air_date.lte'] = '${decade + 9}-12-31';
+        }
+      } else {
+        params['first_air_date.gte'] = '$yr-01-01';
+        params['first_air_date.lte'] = '$yr-12-31';
+      }
+    }
+
+    return params;
+  }
+
+  void _applyFilters(SearchFilters f) {
+    setState(() {
+      _filters = f;
+      _itemsByTab.clear();
+      _pageByTab.clear();
+      _totalPagesByTab.clear();
+    });
+    _fetchPage(_currentTab, 1);
+  }
+
+  Future<void> _openFilters() async {
+    final result = await showModalBottomSheet<SearchFilters>(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (_) => MediaFilterSheet(current: _filters, mediaType: 'tv'),
+    );
+    if (result != null) _applyFilters(result);
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -162,7 +238,6 @@ class _TvShowsScreenState extends State<TvShowsScreen>
       appBar: _buildAppBar(),
       body: Column(
         children: [
-          // Genre/type tab bar
           Container(
             color: AppTheme.surfaceDark,
             child: TabBar(
@@ -174,14 +249,17 @@ class _TvShowsScreenState extends State<TvShowsScreen>
               indicatorSize: TabBarIndicatorSize.label,
               labelColor: Colors.white,
               unselectedLabelColor: const Color(0xFF888899),
-              labelStyle: GoogleFonts.outfit(
-                  fontSize: 13, fontWeight: FontWeight.w600),
-              unselectedLabelStyle: GoogleFonts.outfit(
-                  fontSize: 13, fontWeight: FontWeight.w400),
+              labelStyle: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w600),
+              unselectedLabelStyle: GoogleFonts.outfit(fontSize: 13, fontWeight: FontWeight.w400),
               dividerColor: const Color(0xFF2A2A3E),
               tabs: _tabs.map((t) => Tab(text: t.label)).toList(),
             ),
           ),
+          if (!_filters.isDefault)
+            _TvActiveFilterStrip(
+              filters: _filters,
+              onClear: () => _applyFilters(const SearchFilters()),
+            ),
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -194,6 +272,7 @@ class _TvShowsScreenState extends State<TvShowsScreen>
   }
 
   PreferredSizeWidget _buildAppBar() {
+    final active = _filters.activeCount;
     return AppBar(
       backgroundColor: AppTheme.surfaceDark,
       elevation: 0,
@@ -201,13 +280,36 @@ class _TvShowsScreenState extends State<TvShowsScreen>
       title: Row(
         children: [
           const Text('📺 ', style: TextStyle(fontSize: 20)),
-          Text('Watch TV Series',
+          Text('TV Shows',
               style: GoogleFonts.outfit(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
-                  color: Colors.white)),
+                  fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
         ],
       ),
+      actions: [
+        GestureDetector(
+          onTap: _openFilters,
+          child: Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: active > 0 ? AppTheme.primary.withAlpha(30) : AppTheme.surfaceVariantDark,
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(
+                  color: active > 0 ? AppTheme.primary : const Color(0xFF444466)),
+            ),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              Icon(Icons.tune_rounded, size: 15,
+                  color: active > 0 ? AppTheme.primary : const Color(0xFF888899)),
+              const SizedBox(width: 5),
+              Text(active > 0 ? 'Filters ($active)' : 'Filters',
+                  style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: active > 0 ? FontWeight.w600 : FontWeight.w400,
+                      color: active > 0 ? AppTheme.primary : const Color(0xFF888899))),
+            ]),
+          ),
+        ),
+      ],
       bottom: PreferredSize(
         preferredSize: const Size.fromHeight(1),
         child: Container(height: 1, color: const Color(0xFF2A2A3E)),
@@ -234,9 +336,16 @@ class _TvShowsScreenState extends State<TvShowsScreen>
             const SizedBox(height: 16),
             Text('No shows found',
                 style: GoogleFonts.outfit(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                    color: Colors.white)),
+                    fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+            if (!_filters.isDefault) ...[
+              const SizedBox(height: 12),
+              TextButton(
+                onPressed: () => _applyFilters(const SearchFilters()),
+                child: Text('Clear filters',
+                    style: GoogleFonts.outfit(
+                        color: AppTheme.primary, fontWeight: FontWeight.w600)),
+              ),
+            ],
           ],
         ),
       );
@@ -433,4 +542,56 @@ class _TvTab {
     required this.genreId,
     this.trending = false,
   });
+}
+
+// ─── Active filter strip ──────────────────────────────────────────────────────
+
+class _TvActiveFilterStrip extends StatelessWidget {
+  final SearchFilters filters;
+  final VoidCallback onClear;
+  const _TvActiveFilterStrip({required this.filters, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    final chips = <String>[];
+    if (filters.genre    != 'All') chips.add(filters.genre);
+    if (filters.country  != 'All') chips.add(filters.country);
+    if (filters.year     != 'All') chips.add(filters.year);
+    if (filters.language != 'All') chips.add(filters.language);
+    if (filters.sortBy   != 'Hottest') chips.add('↕ ${filters.sortBy}');
+
+    return Container(
+      padding: const EdgeInsets.fromLTRB(16, 6, 16, 6),
+      color: AppTheme.surfaceDark,
+      child: Row(children: [
+        Expanded(
+          child: SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: chips.map((c) => Container(
+                margin: const EdgeInsets.only(right: 6),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withAlpha(30),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AppTheme.primary.withAlpha(80)),
+                ),
+                child: Text(c, style: GoogleFonts.outfit(
+                    fontSize: 12, fontWeight: FontWeight.w500, color: AppTheme.primary)),
+              )).toList(),
+            ),
+          ),
+        ),
+        GestureDetector(
+          onTap: onClear,
+          child: Padding(
+            padding: const EdgeInsets.only(left: 8),
+            child: Text('Clear', style: GoogleFonts.outfit(
+                fontSize: 12, fontWeight: FontWeight.w600,
+                color: const Color(0xFF888899))),
+          ),
+        ),
+      ]),
+    );
+  }
 }

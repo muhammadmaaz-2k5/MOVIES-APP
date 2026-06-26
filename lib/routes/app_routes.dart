@@ -6,6 +6,7 @@ import '../presentation/anime_screen/anime_screen.dart';
 import '../presentation/category_section_screen/category_section_screen.dart';
 import '../presentation/home_screen/home_screen.dart';
 import '../presentation/movies_screen/movies_screen.dart';
+import '../presentation/season_detail_screen/season_detail_screen.dart';
 import '../presentation/tv_shows_screen/tv_shows_screen.dart';
 import '../presentation/movie_tv_show_detail_screen/movie_tv_show_detail_screen.dart';
 import '../presentation/search_screen/search_screen.dart';
@@ -23,6 +24,7 @@ class AppRoutes {
   static const String searchScreen           = '/search';
   static const String seeAllScreen           = '/see-all';
   static const String categorySectionScreen  = '/category-section';
+  static const String seasonDetailScreen     = '/season-detail';
 }
 
 // Shared slide+fade transition
@@ -140,6 +142,15 @@ final GoRouter appRouter = GoRouter(
         state,
         ActorPersonDetailScreen(
           person: state.extra as Map<String, dynamic>?,
+        ),
+      ),
+    ),
+    GoRoute(
+      path: AppRoutes.seasonDetailScreen,
+      pageBuilder: (context, state) => _slidePage(
+        state,
+        SeasonDetailScreen(
+          season: state.extra as Map<String, dynamic>,
         ),
       ),
     ),

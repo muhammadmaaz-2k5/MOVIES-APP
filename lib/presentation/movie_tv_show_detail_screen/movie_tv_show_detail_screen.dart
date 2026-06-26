@@ -415,7 +415,11 @@ class _MovieTvShowDetailScreenState extends State<MovieTvShowDetailScreen> {
                           ],
                           // Seasons (TV only)
                           if (_seasons.isNotEmpty) ...[
-                            DetailSeasonsWidget(seasons: _seasons),
+                            DetailSeasonsWidget(
+                              seasons:   _seasons,
+                              showId:    (item['id'] as int? ?? 0),
+                              showTitle: (item['title'] as String? ?? ''),
+                            ),
                             const SizedBox(height: 24),
                           ],
                           // Info card

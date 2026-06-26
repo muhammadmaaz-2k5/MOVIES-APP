@@ -323,11 +323,20 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   ];
 
   static const List<String> _filterOptions = ['All', 'Movies', 'TV Shows'];
+  static const List<String> _categories = ['All', 'Punjabi', 'Hollywood', 'Bollywood'];
+
+  // Language tags per category (matched against item 'language' or 'genres')
+  static const Map<String, List<String>> _categoryLanguages = {
+    'Punjabi': ['pa', 'punjabi'],
+    'Hollywood': ['en', 'english'],
+    'Bollywood': ['hi', 'hindi'],
+  };
 
   late List<Map<String, dynamic>> _featured;
   late List<Map<String, dynamic>> _trending;
   late List<Map<String, dynamic>> _popular;
   late List<Map<String, dynamic>> _topRated;
+  int _selectedCategory = 0;
 
   @override
   void initState() {
@@ -352,9 +361,38 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   }
 
   List<Map<String, dynamic>> _filteredList(List<Map<String, dynamic>> list) {
-    if (_selectedFilter == 0) return list;
-    final type = _selectedFilter == 1 ? 'movie' : 'tv';
-    return list.where((e) => e['type'] == type).toList();
+    var result = list;
+    // Type filter (All / Movies / TV Shows)
+    if (_selectedFilter != 0) {
+      final type = _selectedFilter == 1 ? 'movie' : 'tv';
+      result = result.where((e) => e['type'] == type).toList();
+    }
+    // Category filter
+    if (_selectedCategory != 0) {
+      final cat = _categories[_selectedCategory];
+      final tags = _categoryLanguages[cat] ?? [];
+      result = result.where((e) {
+        final lang = (e['language'] as String? ?? '').toLowerCase();
+        final title = (e['title'] as String? ?? '').toLowerCase();
+        // match by language field or by known title keywords
+        for (final tag in tags) {
+          if (lang.contains(tag)) return true;
+        }
+        // Fallback: Hollywood = English movies, Bollywood = Hindi/Indian titles
+        if (cat == 'Hollywood') {
+          return lang.isEmpty || lang == 'en' || lang == 'english';
+        }
+        if (cat == 'Bollywood') {
+          return lang == 'hi' || lang == 'hindi' ||
+              title.contains('bollywood');
+        }
+        if (cat == 'Punjabi') {
+          return lang == 'pa' || lang == 'punjabi';
+        }
+        return false;
+      }).toList();
+    }
+    return result;
   }
 
   @override
@@ -390,11 +428,18 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                     ),
                   ),
                   const SizedBox(height: 20),
-                  // Filter chips
+                  // Filter chips (All / Movies / TV Shows)
                   FilterChipsWidget(
                     options: _filterOptions,
                     selectedIndex: _selectedFilter,
                     onSelected: (i) => setState(() => _selectedFilter = i),
+                  ),
+                  const SizedBox(height: 12),
+                  // Category chips (All / Punjabi / Hollywood / Bollywood)
+                  _CategoryChipsRow(
+                    categories: _categories,
+                    selectedIndex: _selectedCategory,
+                    onSelected: (i) => setState(() => _selectedCategory = i),
                   ),
                   const SizedBox(height: 24),
                   // Trending Now
@@ -561,6 +606,82 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _CategoryChipsRow extends StatelessWidget {
+  final List<String> categories;
+  final int selectedIndex;
+  final void Function(int) onSelected;
+
+  const _CategoryChipsRow({
+    required this.categories,
+    required this.selectedIndex,
+    required this.onSelected,
+  });
+
+  // Emoji/icon per category
+  static const Map<String, String> _icons = {
+    'All': '🎬',
+    'Punjabi': '🎵',
+    'Hollywood': '⭐',
+    'Bollywood': '💃',
+  };
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 38,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: 16),
+        itemCount: categories.length,
+        separatorBuilder: (_, __) => const SizedBox(width: 8),
+        itemBuilder: (context, i) {
+          final cat = categories[i];
+          final selected = i == selectedIndex;
+          final emoji = _icons[cat] ?? '🎬';
+          return GestureDetector(
+            onTap: () => onSelected(i),
+            child: AnimatedContainer(
+              duration: const Duration(milliseconds: 200),
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: selected
+                    ? AppTheme.accent.withAlpha(220)
+                    : AppTheme.surfaceVariantDark,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: selected
+                      ? AppTheme.accent
+                      : const Color(0xFF444466),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(emoji, style: const TextStyle(fontSize: 13)),
+                  const SizedBox(width: 5),
+                  Text(
+                    cat,
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: selected
+                          ? FontWeight.w700
+                          : FontWeight.w400,
+                      color: selected
+                          ? Colors.black
+                          : const Color(0xFF888899),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          );
+        },
       ),
     );
   }

@@ -1,15 +1,59 @@
 import 'package:google_fonts/google_fonts.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../core/app_export.dart';
-import '../services/download_manager.dart';
 
-/// A self-contained download button that shows state and opens quality picker.
-class DownloadButton extends StatefulWidget {
+// ─── Download link builders ───────────────────────────────────────────────────
+
+class _DownloadSource {
+  final String name;
+  final String icon;
+  final String Function(int id, String type, {int? season, int? episode}) buildUrl;
+
+  const _DownloadSource({
+    required this.name,
+    required this.icon,
+    required this.buildUrl,
+  });
+}
+
+final _kSources = [
+  _DownloadSource(
+    name: 'YTS (Movies)',
+    icon: '🎬',
+    buildUrl: (id, type, {season, episode}) =>
+        'https://yts.mx/browse-movies',
+  ),
+  _DownloadSource(
+    name: 'Archive.org',
+    icon: '📦',
+    buildUrl: (id, type, {season, episode}) =>
+        'https://archive.org/search?query=$id',
+  ),
+  _DownloadSource(
+    name: 'Open Subtitles',
+    icon: '📝',
+    buildUrl: (id, type, {season, episode}) {
+      if (type == 'tv' && season != null && episode != null) {
+        return 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-$id/season-$season/episode-$episode';
+      }
+      return 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-$id';
+    },
+  ),
+];
+
+// ─── Download button ──────────────────────────────────────────────────────────
+
+/// Tapping opens a bottom sheet with external download links.
+/// No in-app downloading — links open in the device browser.
+class DownloadButton extends StatelessWidget {
   final int    tmdbId;
   final String title;
-  final String type;       // 'movie' | 'tv_episode'
+  final String type;      // 'movie' | 'tv_episode'
   final String posterUrl;
-  final String subtitle;   // episode label, empty for movies
+  final String subtitle;  // episode label, empty for movies
+  final int?   season;
+  final int?   episode;
 
   const DownloadButton({
     super.key,
@@ -18,214 +62,83 @@ class DownloadButton extends StatefulWidget {
     required this.type,
     required this.posterUrl,
     this.subtitle = '',
+    this.season,
+    this.episode,
   });
 
-  @override
-  State<DownloadButton> createState() => _DownloadButtonState();
-}
-
-class _DownloadButtonState extends State<DownloadButton> {
-  @override
-  void initState() {
-    super.initState();
-    DownloadManager.instance.addListener(_onUpdate);
-  }
-
-  @override
-  void dispose() {
-    DownloadManager.instance.removeListener(_onUpdate);
-    super.dispose();
-  }
-
-  void _onUpdate() => setState(() {});
-
-  DownloadItem? get _anyItem {
-    final dm = DownloadManager.instance;
-    for (final q in ['1080p', '720p', '480p']) {
-      final id = '${widget.type}_${widget.tmdbId}_$q';
-      final item = dm.getItem(id);
-      if (item != null) return item;
-    }
-    return null;
-  }
-
-  void _onTap() {
-    final item = _anyItem;
-    if (item == null) {
-      _showQualityPicker();
-      return;
-    }
-    switch (item.status) {
-      case DownloadStatus.downloading:
-        DownloadManager.instance.pause(item.id);
-      case DownloadStatus.paused:
-        DownloadManager.instance.resume(item.id);
-      case DownloadStatus.completed:
-        _showCompletedMenu(item);
-      case DownloadStatus.failed:
-        DownloadManager.instance.retry(item.id);
-      case DownloadStatus.queued:
-        DownloadManager.instance.cancel(item.id);
-    }
-  }
-
-  void _showQualityPicker() {
+  void _onTap(BuildContext context) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.transparent,
-      builder: (_) => _QualityPickerSheet(
-        title: widget.title,
-        onSelect: (quality) {
-          DownloadManager.instance.addDownload(
-            tmdbId:   widget.tmdbId,
-            title:    widget.title,
-            type:     widget.type,
-            quality:  quality,
-            posterUrl: widget.posterUrl,
-            subtitle:  widget.subtitle,
-          );
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-            content: Text('Download started ($quality)',
-                style: GoogleFonts.outfit()),
-            backgroundColor: AppTheme.surfaceDark,
-            duration: const Duration(seconds: 2),
-            action: SnackBarAction(
-              label: 'View',
-              textColor: AppTheme.primary,
-              onPressed: () => context.push(AppRoutes.downloadsScreen),
-            ),
-          ));
-        },
-      ),
-    );
-  }
-
-  void _showCompletedMenu(DownloadItem item) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppTheme.surfaceDark,
-      shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
-      builder: (_) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 40, height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(color: const Color(0xFF444466),
-                  borderRadius: BorderRadius.circular(2))),
-          ListTile(
-            leading: const Icon(Icons.play_arrow_rounded, color: AppTheme.primary),
-            title: Text('Play offline', style: GoogleFonts.outfit(color: Colors.white)),
-            onTap: () {
-              Navigator.pop(context);
-              ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-                content: Text('Playing offline: ${item.title}',
-                    style: GoogleFonts.outfit()),
-                backgroundColor: AppTheme.surfaceDark,
-              ));
-            },
-          ),
-          ListTile(
-            leading: const Icon(Icons.delete_outline_rounded, color: Colors.redAccent),
-            title: Text('Delete download', style: GoogleFonts.outfit(color: Colors.white)),
-            onTap: () {
-              DownloadManager.instance.deleteCompleted(item.id);
-              Navigator.pop(context);
-            },
-          ),
-          const SizedBox(height: 8),
-        ]),
+      isScrollControlled: true,
+      builder: (_) => _DownloadLinksSheet(
+        tmdbId:   tmdbId,
+        title:    title,
+        type:     type,
+        subtitle: subtitle,
+        season:   season,
+        episode:  episode,
       ),
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final item = _anyItem;
     return GestureDetector(
-      onTap: _onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 250),
+      onTap: () => _onTap(context),
+      child: Container(
         width: 52, height: 52,
         decoration: BoxDecoration(
-          color: _bgColor(item),
+          color: AppTheme.surfaceDark,
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: _borderColor(item)),
+          border: Border.all(color: const Color(0xFF444466)),
         ),
-        child: item != null && item.status == DownloadStatus.downloading
-            ? Stack(alignment: Alignment.center, children: [
-                SizedBox(width: 28, height: 28,
-                    child: CircularProgressIndicator(
-                        value:       item.progress,
-                        color:       AppTheme.primary,
-                        backgroundColor: const Color(0xFF2A2A3E),
-                        strokeWidth: 2.5)),
-                Icon(_icon(item), color: _iconColor(item), size: 14),
-              ])
-            : Icon(_icon(item), color: _iconColor(item), size: 22),
+        child: const Icon(Icons.download_rounded,
+            color: Color(0xFF888899), size: 22),
       ),
     );
-  }
-
-  IconData _icon(DownloadItem? item) {
-    if (item == null)                             return Icons.download_rounded;
-    switch (item.status) {
-      case DownloadStatus.queued:                 return Icons.hourglass_top_rounded;
-      case DownloadStatus.downloading:            return Icons.pause_rounded;
-      case DownloadStatus.paused:                 return Icons.play_arrow_rounded;
-      case DownloadStatus.completed:              return Icons.download_done_rounded;
-      case DownloadStatus.failed:                 return Icons.refresh_rounded;
-    }
-  }
-
-  Color _iconColor(DownloadItem? item) {
-    if (item == null)                             return const Color(0xFF888899);
-    switch (item.status) {
-      case DownloadStatus.completed:              return const Color(0xFF00C875);
-      case DownloadStatus.failed:                 return Colors.redAccent;
-      case DownloadStatus.paused:                 return const Color(0xFFFDAA07);
-      default:                                    return AppTheme.primary;
-    }
-  }
-
-  Color _bgColor(DownloadItem? item) {
-    if (item?.status == DownloadStatus.completed) {
-      return const Color(0xFF00C875).withAlpha(20);
-    }
-    if (item?.status == DownloadStatus.downloading ||
-        item?.status == DownloadStatus.paused) {
-      return AppTheme.primary.withAlpha(20);
-    }
-    return AppTheme.surfaceDark;
-  }
-
-  Color _borderColor(DownloadItem? item) {
-    if (item?.status == DownloadStatus.completed) {
-      return const Color(0xFF00C875).withAlpha(80);
-    }
-    if (item?.status == DownloadStatus.downloading ||
-        item?.status == DownloadStatus.paused) {
-      return AppTheme.primary.withAlpha(80);
-    }
-    return const Color(0xFF444466);
   }
 }
 
-// ─── Quality picker sheet ─────────────────────────────────────────────────────
+// ─── Download links sheet ─────────────────────────────────────────────────────
 
-class _QualityPickerSheet extends StatelessWidget {
-  final String   title;
-  final void Function(String) onSelect;
+class _DownloadLinksSheet extends StatelessWidget {
+  final int    tmdbId;
+  final String title;
+  final String type;
+  final String subtitle;
+  final int?   season;
+  final int?   episode;
 
-  const _QualityPickerSheet({required this.title, required this.onSelect});
+  const _DownloadLinksSheet({
+    required this.tmdbId,
+    required this.title,
+    required this.type,
+    required this.subtitle,
+    this.season,
+    this.episode,
+  });
 
-  static const _qualities = [
-    _Q('1080p HD',  '1080p', '~1.8 GB',  Icons.hd_rounded),
-    _Q('720p',      '720p',  '~900 MB',  Icons.sd_rounded),
-    _Q('480p',      '480p',  '~400 MB',  Icons.sd_card_rounded),
-  ];
+  Future<void> _open(BuildContext context, String url) async {
+    Navigator.pop(context);
+    final uri = Uri.parse(url);
+    if (await canLaunchUrl(uri)) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
+    } else {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+          content: Text('Could not open link', style: GoogleFonts.outfit()),
+          backgroundColor: AppTheme.surfaceDark,
+        ));
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
+    final displayTitle = subtitle.isNotEmpty ? '$title · $subtitle' : title;
+    final mediaType    = type == 'tv_episode' ? 'tv' : 'movie';
+
     return Container(
       decoration: const BoxDecoration(
         color: Color(0xFF1E1E2E),
@@ -233,52 +146,110 @@ class _QualityPickerSheet extends StatelessWidget {
       ),
       child: SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 40, height: 4,
-              margin: const EdgeInsets.symmetric(vertical: 12),
-              decoration: BoxDecoration(color: const Color(0xFF444466),
-                  borderRadius: BorderRadius.circular(2))),
+          // Handle
+          Container(
+            width: 40, height: 4,
+            margin: const EdgeInsets.symmetric(vertical: 12),
+            decoration: BoxDecoration(
+                color: const Color(0xFF444466),
+                borderRadius: BorderRadius.circular(2))),
+
+          // Header
           Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-            child: Column(children: [
-              Text('Download Quality', style: GoogleFonts.outfit(
-                  fontSize: 18, fontWeight: FontWeight.w700, color: Colors.white)),
-              const SizedBox(height: 4),
-              Text(title, style: GoogleFonts.outfit(
-                  fontSize: 13, color: const Color(0xFF888899)),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
+            padding: const EdgeInsets.fromLTRB(20, 0, 20, 4),
+            child: Row(children: [
+              const Icon(Icons.download_rounded,
+                  color: AppTheme.primary, size: 20),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text('Download',
+                        style: GoogleFonts.outfit(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white)),
+                    Text(displayTitle,
+                        style: GoogleFonts.outfit(
+                            fontSize: 12, color: const Color(0xFF888899)),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                  ],
+                ),
+              ),
             ]),
           ),
-          ..._qualities.map((q) => ListTile(
-            leading: Container(
-              width: 42, height: 42,
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withAlpha(20),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Icon(q.icon, color: AppTheme.primary, size: 22),
+
+          // Info notice
+          Container(
+            margin: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withAlpha(15),
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: AppTheme.primary.withAlpha(50)),
             ),
-            title: Text(q.label, style: GoogleFonts.outfit(
-                color: Colors.white, fontWeight: FontWeight.w600)),
-            subtitle: Text(q.size, style: GoogleFonts.outfit(
-                color: const Color(0xFF888899), fontSize: 12)),
-            trailing: const Icon(Icons.download_rounded,
-                color: Color(0xFF888899), size: 20),
-            onTap: () {
-              Navigator.pop(context);
-              onSelect(q.value);
-            },
-          )),
-          const SizedBox(height: 8),
+            child: Row(children: [
+              const Icon(Icons.open_in_browser_rounded,
+                  color: AppTheme.primary, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Links open in your browser. Download availability depends on the source.',
+                  style: GoogleFonts.outfit(
+                      fontSize: 11, color: Colors.white70, height: 1.4),
+                ),
+              ),
+            ]),
+          ),
+
+          const Divider(color: Color(0xFF2A2A3E), height: 24),
+
+          // Source list
+          ..._kSources.map((src) {
+            final url = src.buildUrl(tmdbId, mediaType,
+                season: season, episode: episode);
+            return ListTile(
+              contentPadding:
+                  const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+              leading: Container(
+                width: 42, height: 42,
+                decoration: BoxDecoration(
+                  color: AppTheme.surfaceVariantDark,
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Center(
+                    child: Text(src.icon,
+                        style: const TextStyle(fontSize: 20)))),
+              title: Text(src.name,
+                  style: GoogleFonts.outfit(
+                      color: Colors.white, fontWeight: FontWeight.w600)),
+              subtitle: Text(url,
+                  style: GoogleFonts.outfit(
+                      fontSize: 10, color: const Color(0xFF888899)),
+                  maxLines: 1, overflow: TextOverflow.ellipsis),
+              trailing: Container(
+                padding: const EdgeInsets.symmetric(
+                    horizontal: 10, vertical: 5),
+                decoration: BoxDecoration(
+                  color: AppTheme.primary.withAlpha(20),
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                      color: AppTheme.primary.withAlpha(80)),
+                ),
+                child: Text('Open',
+                    style: GoogleFonts.outfit(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppTheme.primary)),
+              ),
+              onTap: () => _open(context, url),
+            );
+          }),
+
+          const SizedBox(height: 12),
         ]),
       ),
     );
   }
-}
-
-class _Q {
-  final String   label;
-  final String   value;
-  final String   size;
-  final IconData icon;
-  const _Q(this.label, this.value, this.size, this.icon);
 }

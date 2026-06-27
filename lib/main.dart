@@ -2,13 +2,9 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
 
 import 'core/app_export.dart';
-import 'services/download_manager.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
-
-  // Init download manager (loads persisted state)
-  await DownloadManager.instance.init();
 
   bool hasShownError = false;
 

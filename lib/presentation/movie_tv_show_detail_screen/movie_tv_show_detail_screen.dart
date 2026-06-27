@@ -457,7 +457,8 @@ class _MovieTvShowDetailScreenState extends State<MovieTvShowDetailScreen> {
                     isInWatchlist: _isInWatchlist,
                     onWatchlistToggle: () =>
                         setState(() => _isInWatchlist = !_isInWatchlist),
-                    item: item,
+                    item:    item,
+                    seasons: _seasons,
                   ),
                 ),
               ],

@@ -29,52 +29,13 @@ final List<VideoServer> kVideoServers = [
     label: 'VidFast',
     icon: '⚡',
     buildUrl: (item, {season, episode}) {
-      final id   = item['id'] as int? ?? 0;
-      final type = item['type'] as String? ?? 'movie';
-      final theme = '6C5CE7'; // matches AppTheme.primary
+      final id    = item['id'] as int? ?? 0;
+      final type  = item['type'] as String? ?? 'movie';
+      final theme = '6C5CE7';
       if (type == 'tv' && season != null && episode != null) {
         return 'https://vidfast.pro/tv/$id/$season/$episode?autoPlay=true&theme=$theme&nextButton=true&autoNext=true';
       }
       return 'https://vidfast.pro/movie/$id?autoPlay=true&theme=$theme';
-    },
-  ),
-  VideoServer(
-    name: 'vidsrc',
-    label: 'VidSrc',
-    icon: '🎬',
-    buildUrl: (item, {season, episode}) {
-      final id   = item['id'] as int? ?? 0;
-      final type = item['type'] as String? ?? 'movie';
-      if (type == 'tv' && season != null && episode != null) {
-        return 'https://vidsrc.xyz/embed/tv?tmdb=$id&season=$season&episode=$episode';
-      }
-      return 'https://vidsrc.xyz/embed/movie?tmdb=$id';
-    },
-  ),
-  VideoServer(
-    name: 'superembed',
-    label: 'SuperEmbed',
-    icon: '🚀',
-    buildUrl: (item, {season, episode}) {
-      final id   = item['id'] as int? ?? 0;
-      final type = item['type'] as String? ?? 'movie';
-      if (type == 'tv' && season != null && episode != null) {
-        return 'https://multiembed.mov/directstream.php?video_id=$id&tmdb=1&s=$season&e=$episode';
-      }
-      return 'https://multiembed.mov/directstream.php?video_id=$id&tmdb=1';
-    },
-  ),
-  VideoServer(
-    name: 'embed2',
-    label: 'Embed2',
-    icon: '📺',
-    buildUrl: (item, {season, episode}) {
-      final id   = item['id'] as int? ?? 0;
-      final type = item['type'] as String? ?? 'movie';
-      if (type == 'tv' && season != null && episode != null) {
-        return 'https://www.2embed.cc/embedtv/$id&s=$season&e=$episode';
-      }
-      return 'https://www.2embed.cc/embed/$id';
     },
   ),
 ];

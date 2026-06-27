@@ -1,6 +1,7 @@
 import 'package:dio/dio.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_flutter/webview_flutter.dart';
+import 'package:flutter/services.dart';
 
 import '../../core/app_export.dart';
 import '../movie_player_screen/movie_player_screen.dart';
@@ -172,7 +173,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
   int  _serverIdx  = 0;
   bool _isLoading  = true;
   bool _hasError   = false;
-  bool _isExpanded = false;
+  bool _nudgeShown = false;
 
   int  get _showId   => widget.episode['showId']        as int? ?? 0;
   int  get _season   => widget.episode['seasonNum']     as int? ?? 1;
@@ -180,10 +181,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
   String get _epName => widget.episode['name'] as String? ?? '';
 
   String get _url {
-    final item = {
-      'id':   _showId,
-      'type': 'tv',
-    };
+    final item = {'id': _showId, 'type': 'tv'};
     return kVideoServers[_serverIdx].buildUrl(
         item, season: _season, episode: _epNumber);
   }
@@ -191,7 +189,42 @@ class _InlinePlayerState extends State<_InlinePlayer> {
   @override
   void initState() {
     super.initState();
+    // Allow rotation
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.portraitUp,
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
     _initWvc();
+    // Show nudge after 3s
+    Future.delayed(const Duration(seconds: 3), () {
+      if (mounted && !_nudgeShown) {
+        setState(() => _nudgeShown = true);
+        Future.delayed(const Duration(seconds: 4), () {
+          if (mounted) setState(() => _nudgeShown = false);
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    super.dispose();
+  }
+
+  void _enterLandscape() {
+    SystemChrome.setPreferredOrientations([
+      DeviceOrientation.landscapeLeft,
+      DeviceOrientation.landscapeRight,
+    ]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+  }
+
+  void _exitLandscape() {
+    SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+    SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
 
   void _initWvc() {
@@ -220,78 +253,131 @@ class _InlinePlayerState extends State<_InlinePlayer> {
 
   @override
   Widget build(BuildContext context) {
-    final playerH = _isExpanded
-        ? MediaQuery.of(context).size.height * 0.6
-        : MediaQuery.of(context).size.width * 9 / 16;
-    final server = kVideoServers[_serverIdx];
+    return OrientationBuilder(builder: (context, orientation) {
+      final isLandscape = orientation == Orientation.landscape;
+      final server      = kVideoServers[_serverIdx];
 
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 300),
-      curve: Curves.easeOutCubic,
-      height: playerH,
-      color: Colors.black,
-      child: Column(children: [
-        // ── Player WebView ─────────────────────────────────────
-        Expanded(
+      // ── LANDSCAPE: fullscreen ────────────────────────────────
+      if (isLandscape) {
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+        return SizedBox(
+          height: MediaQuery.of(context).size.height,
           child: Stack(fit: StackFit.expand, children: [
             WebViewWidget(controller: _wvc),
-
-            // Loading
             if (_isLoading)
-              Container(color: Colors.black,
-                child: Center(child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    CircularProgressIndicator(color: AppTheme.primary, strokeWidth: 2),
-                    const SizedBox(height: 10),
-                    Text('Loading ${server.label}…',
-                        style: GoogleFonts.outfit(color: Colors.white54, fontSize: 12)),
-                  ],
-                ))),
-
-            // Error
+              _LandscapeLoading(serverLabel: server.label),
             if (_hasError && !_isLoading)
-              Container(color: Colors.black,
-                child: Center(child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    const Icon(Icons.error_outline_rounded, color: Colors.white38, size: 40),
-                    const SizedBox(height: 8),
-                    Text('Stream unavailable', style: GoogleFonts.outfit(
-                        color: Colors.white, fontSize: 14)),
-                    const SizedBox(height: 12),
-                    Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-                      _PillBtn(label: 'Retry', icon: Icons.refresh_rounded,
-                          onTap: () { setState(() { _isLoading = true; _hasError = false; }); _wvc.reload(); }),
-                      const SizedBox(width: 10),
-                      _PillBtn(label: 'Next Server', icon: Icons.swap_horiz_rounded,
-                          onTap: () => _switchServer((_serverIdx + 1) % kVideoServers.length)),
-                    ]),
-                  ],
-                ))),
+              _LandscapeError(
+                onRetry:      () { setState(() { _isLoading = true; _hasError = false; }); _wvc.reload(); },
+                onNextServer: () => _switchServer((_serverIdx + 1) % kVideoServers.length),
+              ),
+            // Top controls bar
+            Positioned(top: 0, left: 0, right: 0,
+              child: Container(
+                color: Colors.black.withAlpha(120),
+                padding: EdgeInsets.only(
+                    top: MediaQuery.of(context).padding.top + 4,
+                    left: 12, right: 12, bottom: 8),
+                child: Row(children: [
+                  GestureDetector(
+                    onTap: _exitLandscape,
+                    child: const Icon(Icons.keyboard_arrow_down_rounded,
+                        color: Colors.white, size: 26)),
+                  const SizedBox(width: 10),
+                  Expanded(child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(widget.showTitle,
+                          style: GoogleFonts.outfit(fontSize: 11, color: Colors.white54),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                      Text('S$_season E$_epNumber · $_epName',
+                          style: GoogleFonts.outfit(
+                              fontSize: 12, fontWeight: FontWeight.w600,
+                              color: Colors.white),
+                          maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ],
+                  )),
+                  GestureDetector(
+                    onTap: () => _showServerSheet(context),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withAlpha(30),
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppTheme.primary.withAlpha(80))),
+                      child: Row(mainAxisSize: MainAxisSize.min, children: [
+                        Text(server.icon, style: const TextStyle(fontSize: 12)),
+                        const SizedBox(width: 4),
+                        Text(server.label, style: GoogleFonts.outfit(
+                            fontSize: 10, fontWeight: FontWeight.w700,
+                            color: AppTheme.primary)),
+                        const Icon(Icons.expand_more_rounded,
+                            color: AppTheme.primary, size: 12),
+                      ]),
+                    )),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: () { setState(() { _isLoading = true; _hasError = false; }); _wvc.reload(); },
+                    child: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 20)),
+                  const SizedBox(width: 8),
+                  GestureDetector(
+                    onTap: _exitLandscape,
+                    child: const Icon(Icons.fullscreen_exit_rounded,
+                        color: Colors.white70, size: 20)),
+                ]),
+              )),
           ]),
-        ),
+        );
+      }
 
-        // ── Player control bar ─────────────────────────────────
-        Container(
-          color: const Color(0xFF0D0D1A),
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-          child: Row(children: [
-            // Back/close
-            GestureDetector(
-              onTap: widget.onClose,
-              child: const Icon(Icons.keyboard_arrow_down_rounded,
-                  color: Colors.white70, size: 24)),
-            const SizedBox(width: 10),
-            // Title
-            Expanded(
-              child: Column(
+      // ── PORTRAIT: compact inline player ─────────────────────
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+      final playerH = MediaQuery.of(context).size.width * 9 / 16;
+
+      return Stack(children: [
+        Column(mainAxisSize: MainAxisSize.min, children: [
+          // WebView area
+          SizedBox(
+            height: playerH,
+            child: Stack(fit: StackFit.expand, children: [
+              WebViewWidget(controller: _wvc),
+              if (_isLoading)
+                _LandscapeLoading(serverLabel: server.label),
+              if (_hasError && !_isLoading)
+                _LandscapeError(
+                  onRetry:      () { setState(() { _isLoading = true; _hasError = false; }); _wvc.reload(); },
+                  onNextServer: () => _switchServer((_serverIdx + 1) % kVideoServers.length),
+                ),
+              // Fullscreen hint button
+              Positioned(bottom: 8, right: 8,
+                child: GestureDetector(
+                  onTap: _enterLandscape,
+                  child: Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(
+                      color: Colors.black.withAlpha(140),
+                      borderRadius: BorderRadius.circular(6)),
+                    child: const Icon(Icons.fullscreen_rounded,
+                        color: Colors.white, size: 18)))),
+            ]),
+          ),
+          // Control bar
+          Container(
+            color: const Color(0xFF0D0D1A),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            child: Row(children: [
+              GestureDetector(
+                onTap: widget.onClose,
+                child: const Icon(Icons.keyboard_arrow_down_rounded,
+                    color: Colors.white70, size: 24)),
+              const SizedBox(width: 10),
+              Expanded(child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Text(widget.showTitle,
-                      style: GoogleFonts.outfit(
-                          fontSize: 11, color: Colors.white54),
+                      style: GoogleFonts.outfit(fontSize: 11, color: Colors.white54),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                   Text('S$_season E$_epNumber · $_epName',
                       style: GoogleFonts.outfit(
@@ -299,48 +385,61 @@ class _InlinePlayerState extends State<_InlinePlayer> {
                           color: Colors.white),
                       maxLines: 1, overflow: TextOverflow.ellipsis),
                 ],
-              ),
-            ),
-            // Server indicator
-            GestureDetector(
-              onTap: () => _showServerSheet(context),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withAlpha(30),
-                  borderRadius: BorderRadius.circular(6),
-                  border: Border.all(color: AppTheme.primary.withAlpha(80)),
+              )),
+              GestureDetector(
+                onTap: () => _showServerSheet(context),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: AppTheme.primary.withAlpha(30),
+                    borderRadius: BorderRadius.circular(6),
+                    border: Border.all(color: AppTheme.primary.withAlpha(80))),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    Text(server.icon, style: const TextStyle(fontSize: 12)),
+                    const SizedBox(width: 4),
+                    Text(server.label, style: GoogleFonts.outfit(
+                        fontSize: 10, fontWeight: FontWeight.w700,
+                        color: AppTheme.primary)),
+                    const SizedBox(width: 4),
+                    const Icon(Icons.expand_more_rounded,
+                        color: AppTheme.primary, size: 12),
+                  ]),
+                )),
+              const SizedBox(width: 8),
+              GestureDetector(
+                onTap: () { setState(() { _isLoading = true; _hasError = false; }); _wvc.reload(); },
+                child: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 20)),
+            ]),
+          ),
+        ]),
+        // Rotate nudge
+        if (_nudgeShown)
+          Positioned(top: playerH - 18, left: 0, right: 0,
+            child: Center(
+              child: GestureDetector(
+                onTap: _enterLandscape,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF1E1E2E).withAlpha(230),
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppTheme.primary.withAlpha(100)),
+                    boxShadow: [BoxShadow(
+                        color: Colors.black.withAlpha(80), blurRadius: 12)]),
+                  child: Row(mainAxisSize: MainAxisSize.min, children: [
+                    const Icon(Icons.screen_rotation_rounded,
+                        color: AppTheme.primary, size: 13),
+                    const SizedBox(width: 6),
+                    Text('Rotate for fullscreen',
+                        style: GoogleFonts.outfit(
+                            fontSize: 11, fontWeight: FontWeight.w600,
+                            color: Colors.white)),
+                  ]),
                 ),
-                child: Row(mainAxisSize: MainAxisSize.min, children: [
-                  Text(server.icon, style: const TextStyle(fontSize: 12)),
-                  const SizedBox(width: 4),
-                  Text(server.label,
-                      style: GoogleFonts.outfit(
-                          fontSize: 10, fontWeight: FontWeight.w700,
-                          color: AppTheme.primary)),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.expand_more_rounded,
-                      color: AppTheme.primary, size: 12),
-                ]),
               ),
-            ),
-            const SizedBox(width: 8),
-            // Expand
-            GestureDetector(
-              onTap: () => setState(() => _isExpanded = !_isExpanded),
-              child: Icon(
-                _isExpanded ? Icons.fullscreen_exit_rounded : Icons.fullscreen_rounded,
-                color: Colors.white70, size: 20),
-            ),
-            const SizedBox(width: 8),
-            // Reload
-            GestureDetector(
-              onTap: () { setState(() { _isLoading = true; _hasError = false; }); _wvc.reload(); },
-              child: const Icon(Icons.refresh_rounded, color: Colors.white70, size: 20)),
-          ]),
-        ),
-      ]),
-    );
+            )),
+      ]);
+    });
   }
 
   void _showServerSheet(BuildContext context) {
@@ -808,4 +907,52 @@ class _ErrorState extends StatelessWidget {
         child: Text('Retry', style: GoogleFonts.outfit(
             color: AppTheme.primary, fontWeight: FontWeight.w600))),
     ]));
+}
+
+// ─── Player overlay widgets ───────────────────────────────────────────────────
+
+class _LandscapeLoading extends StatelessWidget {
+  final String serverLabel;
+  const _LandscapeLoading({required this.serverLabel});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    color: Colors.black,
+    child: Center(child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        CircularProgressIndicator(color: AppTheme.primary, strokeWidth: 2),
+        const SizedBox(height: 10),
+        Text('Loading $serverLabel…',
+            style: GoogleFonts.outfit(color: Colors.white54, fontSize: 12)),
+      ],
+    )),
+  );
+}
+
+class _LandscapeError extends StatelessWidget {
+  final VoidCallback onRetry;
+  final VoidCallback onNextServer;
+  const _LandscapeError({required this.onRetry, required this.onNextServer});
+
+  @override
+  Widget build(BuildContext context) => Container(
+    color: Colors.black,
+    child: Center(child: Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        const Icon(Icons.error_outline_rounded, color: Colors.white38, size: 40),
+        const SizedBox(height: 8),
+        Text('Stream unavailable',
+            style: GoogleFonts.outfit(color: Colors.white, fontSize: 14)),
+        const SizedBox(height: 12),
+        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          _PillBtn(label: 'Retry', icon: Icons.refresh_rounded, onTap: onRetry),
+          const SizedBox(width: 10),
+          _PillBtn(label: 'Next Server', icon: Icons.swap_horiz_rounded,
+              onTap: onNextServer),
+        ]),
+      ],
+    )),
+  );
 }

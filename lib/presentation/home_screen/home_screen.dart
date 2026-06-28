@@ -309,7 +309,7 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
     // Also refresh "All" for banner
     if (_selectedCategory != 0) {
       _trendingByCategory.remove(0);
-      await _fetchTrending(0);
+      await _fetchCategory(0);
     }
   }
 

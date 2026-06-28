@@ -1,5 +1,6 @@
 import 'package:google_fonts/google_fonts.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:dio/dio.dart';
 
 import '../core/app_export.dart';
 
@@ -102,7 +103,7 @@ class DownloadButton extends StatelessWidget {
 
 // ─── Download links sheet ─────────────────────────────────────────────────────
 
-class _DownloadLinksSheet extends StatelessWidget {
+class _DownloadLinksSheet extends StatefulWidget {
   final int    tmdbId;
   final String title;
   final String type;
@@ -118,6 +119,42 @@ class _DownloadLinksSheet extends StatelessWidget {
     this.season,
     this.episode,
   });
+
+  @override
+  State<_DownloadLinksSheet> createState() => _DownloadLinksSheetState();
+}
+
+class _DownloadLinksSheetState extends State<_DownloadLinksSheet> {
+  List<dynamic> _links = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchLinks();
+  }
+
+  Future<void> _fetchLinks() async {
+    try {
+      final dio = Dio();
+      final mediaType = widget.type == 'tv_episode' ? 'tv' : 'movie';
+      final url = '${AppConfig.backendBaseUrl}/api/download-links/$mediaType/${widget.tmdbId}';
+      final response = await dio.get(url);
+      final rawList = response.data as List? ?? [];
+      if (mounted) {
+        setState(() {
+          _links = rawList;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
+  }
 
   Future<void> _open(BuildContext context, String url) async {
     Navigator.pop(context);
@@ -136,8 +173,8 @@ class _DownloadLinksSheet extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final displayTitle = subtitle.isNotEmpty ? '$title · $subtitle' : title;
-    final mediaType    = type == 'tv_episode' ? 'tv' : 'movie';
+    final displayTitle = widget.subtitle.isNotEmpty ? '${widget.title} · ${widget.subtitle}' : widget.title;
+    final mediaType    = widget.type == 'tv_episode' ? 'tv' : 'movie';
 
     return Container(
       decoration: const BoxDecoration(
@@ -205,51 +242,122 @@ class _DownloadLinksSheet extends StatelessWidget {
 
           const Divider(color: Color(0xFF2A2A3E), height: 24),
 
-          // Source list
-          ..._kSources.map((src) {
-            final url = src.buildUrl(tmdbId, mediaType,
-                season: season, episode: episode);
-            return ListTile(
-              contentPadding:
-                  const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-              leading: Container(
-                width: 42, height: 42,
-                decoration: BoxDecoration(
-                  color: AppTheme.surfaceVariantDark,
-                  borderRadius: BorderRadius.circular(10),
-                ),
-                child: Center(
-                    child: Text(src.icon,
-                        style: const TextStyle(fontSize: 20)))),
-              title: Text(src.name,
-                  style: GoogleFonts.outfit(
-                      color: Colors.white, fontWeight: FontWeight.w600)),
-              subtitle: Text(url,
-                  style: GoogleFonts.outfit(
-                      fontSize: 10, color: const Color(0xFF888899)),
-                  maxLines: 1, overflow: TextOverflow.ellipsis),
-              trailing: Container(
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 10, vertical: 5),
-                decoration: BoxDecoration(
-                  color: AppTheme.primary.withAlpha(20),
-                  borderRadius: BorderRadius.circular(8),
-                  border: Border.all(
-                      color: AppTheme.primary.withAlpha(80)),
-                ),
-                child: Text('Open',
-                    style: GoogleFonts.outfit(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w700,
-                        color: AppTheme.primary)),
+          if (_isLoading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(
+                child: CircularProgressIndicator(color: AppTheme.primary),
               ),
-              onTap: () => _open(context, url),
-            );
-          }),
+            )
+          else if (_links.isEmpty)
+            _buildFallbacks(context, mediaType)
+          else
+            Flexible(
+              child: ListView.builder(
+                shrinkWrap: true,
+                itemCount: _links.length,
+                itemBuilder: (context, idx) {
+                  final link = _links[idx];
+                  final serverName = link['server_name'] as String? ?? 'Mirror';
+                  final serverIcon = link['server_icon'] as String? ?? '🔗';
+                  final downloadUrl = link['download_url'] as String? ?? '';
+                  final quality = link['quality'] as String? ?? '1080p';
+                  final lang = link['language'] as String? ?? 'English';
+                  final size = link['file_size'] as String? ?? '';
+                  final notes = link['notes'] as String? ?? '';
+
+                  return ListTile(
+                    contentPadding:
+                        const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+                    leading: Container(
+                      width: 42, height: 42,
+                      decoration: BoxDecoration(
+                        color: AppTheme.surfaceVariantDark,
+                        borderRadius: BorderRadius.circular(10),
+                      ),
+                      child: Center(
+                          child: Text(serverIcon,
+                              style: const TextStyle(fontSize: 20)))),
+                    title: Text(serverName,
+                        style: GoogleFonts.outfit(
+                            color: Colors.white, fontWeight: FontWeight.w600)),
+                    subtitle: Text(
+                        '$quality · $lang${size.isNotEmpty ? ' · ' + size : ''}${notes.isNotEmpty ? ' · ' + notes : ''}',
+                        style: GoogleFonts.outfit(
+                            fontSize: 10, color: const Color(0xFF888899)),
+                        maxLines: 1, overflow: TextOverflow.ellipsis),
+                    trailing: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 10, vertical: 5),
+                      decoration: BoxDecoration(
+                        color: AppTheme.primary.withAlpha(20),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
+                            color: AppTheme.primary.withAlpha(80)),
+                      ),
+                      child: Text('Get Link',
+                          style: GoogleFonts.outfit(
+                              fontSize: 12,
+                              fontWeight: FontWeight.w700,
+                              color: AppTheme.primary)),
+                    ),
+                    onTap: () => _open(context, downloadUrl),
+                  );
+                },
+              ),
+            ),
 
           const SizedBox(height: 12),
         ]),
       ),
+    );
+  }
+
+  Widget _buildFallbacks(BuildContext context, String mediaType) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        ..._kSources.map((src) {
+          final url = src.buildUrl(widget.tmdbId, mediaType,
+              season: widget.season, episode: widget.episode);
+          return ListTile(
+            contentPadding:
+                const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
+            leading: Container(
+              width: 42, height: 42,
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceVariantDark,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Center(
+                  child: Text(src.icon,
+                      style: const TextStyle(fontSize: 20)))),
+            title: Text(src.name,
+                style: GoogleFonts.outfit(
+                    color: Colors.white, fontWeight: FontWeight.w600)),
+            subtitle: Text(url,
+                style: GoogleFonts.outfit(
+                    fontSize: 10, color: const Color(0xFF888899)),
+                maxLines: 1, overflow: TextOverflow.ellipsis),
+            trailing: Container(
+              padding: const EdgeInsets.symmetric(
+                  horizontal: 10, vertical: 5),
+              decoration: BoxDecoration(
+                color: AppTheme.primary.withAlpha(20),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: AppTheme.primary.withAlpha(80)),
+              ),
+              child: Text('Open',
+                  style: GoogleFonts.outfit(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: AppTheme.primary)),
+            ),
+            onTap: () => _open(context, url),
+          );
+        }),
+      ],
     );
   }
 }

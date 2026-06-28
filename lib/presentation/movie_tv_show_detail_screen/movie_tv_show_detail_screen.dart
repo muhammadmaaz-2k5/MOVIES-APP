@@ -43,10 +43,9 @@ class _MovieTvShowDetailScreenState extends State<MovieTvShowDetailScreen> {
   List<Map<String, dynamic>> _reviews = [];
   List<Map<String, dynamic>> _seasons = [];
 
-  static const String _tmdbBase = 'https://api.themoviedb.org/3';
+  final String _tmdbBase = AppConfig.tmdbProxyUrl;
   static const String _imageBase = 'https://image.tmdb.org/t/p';
-  static const String _bearerToken =
-      'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1YmM0ZDAzZGU2MzY1YTBlZWY3ZDBhNGM0YTdkMDAyYiIsIm5iZiI6MTc1NTg2NzY0NS40ODg5OTk4LCJzdWIiOiI2OGE4NjlmZGI0NWEzOGEyNWMyNjEzYWEiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0._zPoKSHku3D5XAsfQ-L46MTKvJTs6cOB07Ij386z4OA';
+  
 
   late final Dio _dio;
 
@@ -69,7 +68,7 @@ class _MovieTvShowDetailScreenState extends State<MovieTvShowDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _dio = Dio(BaseOptions(headers: {'Authorization': 'Bearer $_bearerToken'}));
+    _dio = Dio();
     _scrollController.addListener(() {
       final show = _scrollController.offset > 200;
       if (show != _showAppBarTitle) {

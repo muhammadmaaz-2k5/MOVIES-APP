@@ -19,10 +19,9 @@ class SeasonDetailScreen extends StatefulWidget {
 }
 
 class _SeasonDetailScreenState extends State<SeasonDetailScreen> {
-  static const String _tmdbBase    = 'https://api.themoviedb.org/3';
+  final String _tmdbBase = AppConfig.tmdbProxyUrl;
   static const String _imageBase   = 'https://image.tmdb.org/t/p';
-  static const String _bearerToken =
-      'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1YmM0ZDAzZGU2MzY1YTBlZWY3ZDBhNGM0YTdkMDAyYiIsIm5iZiI6MTc1NTg2NzY0NS40ODg5OTk4LCJzdWIiOiI2OGE4NjlmZGI0NWEzOGEyNWMyNjEzYWEiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0._zPoKSHku3D5XAsfQ-L46MTKvJTs6cOB07Ij386z4OA';
+  
 
   late final Dio _dio;
   bool _isLoading = true;
@@ -35,7 +34,7 @@ class _SeasonDetailScreenState extends State<SeasonDetailScreen> {
   @override
   void initState() {
     super.initState();
-    _dio = Dio(BaseOptions(headers: {'Authorization': 'Bearer $_bearerToken'}));
+    _dio = Dio();
     _fetchEpisodes();
   }
 
@@ -170,6 +169,8 @@ class _InlinePlayer extends StatefulWidget {
 
 class _InlinePlayerState extends State<_InlinePlayer> {
   late WebViewController _wvc;
+  List<VideoServer> _servers = [];
+  bool _isLoadingServers = true;
   int  _serverIdx  = 0;
   bool _isLoading  = true;
   bool _hasError   = false;
@@ -182,7 +183,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
 
   String get _url {
     final item = {'id': _showId, 'type': 'tv'};
-    return kVideoServers[_serverIdx].buildUrl(
+    return _servers[_serverIdx].buildUrl(
         item, season: _season, episode: _epNumber);
   }
 
@@ -195,7 +196,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    _initWvc();
+    _loadDynamicServers();
     // Show nudge after 3s
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted && !_nudgeShown) {
@@ -205,6 +206,33 @@ class _InlinePlayerState extends State<_InlinePlayer> {
         });
       }
     });
+  }
+
+  Future<void> _loadDynamicServers() async {
+    try {
+      final dio = Dio();
+      final url = '${AppConfig.backendBaseUrl}/api/config/servers?id=$_showId&type=tv&season=$_season&episode=$_epNumber';
+      final response = await dio.get(url);
+      final rawList = response.data as List? ?? [];
+      final parsed = rawList.map((s) => VideoServer.fromJson(s as Map<String, dynamic>)).toList();
+      if (mounted) {
+        setState(() {
+          _servers = parsed;
+          _isLoadingServers = false;
+        });
+        if (_servers.isNotEmpty) {
+          _initWvc();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _servers = kVideoServers;
+          _isLoadingServers = false;
+        });
+        _initWvc();
+      }
+    }
   }
 
   @override
@@ -253,9 +281,20 @@ class _InlinePlayerState extends State<_InlinePlayer> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingServers) {
+      final playerH = MediaQuery.of(context).size.width * 9 / 16;
+      return Container(
+        height: playerH + 40,
+        color: Colors.black,
+        child: const Center(
+          child: CircularProgressIndicator(color: AppTheme.primary),
+        ),
+      );
+    }
+
     return OrientationBuilder(builder: (context, orientation) {
       final isLandscape = orientation == Orientation.landscape;
-      final server      = kVideoServers[_serverIdx];
+      final server      = _servers[_serverIdx];
 
       // ── LANDSCAPE: fullscreen ────────────────────────────────
       if (isLandscape) {
@@ -269,7 +308,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
             if (_hasError && !_isLoading)
               _LandscapeError(
                 onRetry:      () { setState(() { _isLoading = true; _hasError = false; }); _wvc.reload(); },
-                onNextServer: () => _switchServer((_serverIdx + 1) % kVideoServers.length),
+                onNextServer: () => _switchServer((_serverIdx + 1) % _servers.length),
               ),
             // Top controls bar
             Positioned(top: 0, left: 0, right: 0,
@@ -347,7 +386,7 @@ class _InlinePlayerState extends State<_InlinePlayer> {
               if (_hasError && !_isLoading)
                 _LandscapeError(
                   onRetry:      () { setState(() { _isLoading = true; _hasError = false; }); _wvc.reload(); },
-                  onNextServer: () => _switchServer((_serverIdx + 1) % kVideoServers.length),
+                  onNextServer: () => _switchServer((_serverIdx + 1) % _servers.length),
                 ),
               // Fullscreen hint button
               Positioned(bottom: 8, right: 8,
@@ -463,8 +502,8 @@ class _InlinePlayerState extends State<_InlinePlayer> {
                   fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
             ]),
           ),
-          ...List.generate(kVideoServers.length, (i) {
-            final s        = kVideoServers[i];
+          ...List.generate(_servers.length, (i) {
+            final s        = _servers[i];
             final isActive = i == _serverIdx;
             return ListTile(
               leading: Container(

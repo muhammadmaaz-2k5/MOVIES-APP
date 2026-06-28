@@ -17,3 +17,4 @@ export '../widgets/loading_skeleton_widget.dart';
 export '../widgets/app_navigation.dart';
 export '../widgets/app_scaffold.dart';
 export '../widgets/download_button.dart';
+export 'app_config.dart';

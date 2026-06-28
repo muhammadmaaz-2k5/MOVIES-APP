@@ -89,10 +89,9 @@ class AnimeScreen extends StatefulWidget {
 
 class _AnimeScreenState extends State<AnimeScreen>
     with SingleTickerProviderStateMixin {
-  static const String _tmdbBase = 'https://api.themoviedb.org/3';
+  final String _tmdbBase = AppConfig.tmdbProxyUrl;
   static const String _imageBase = 'https://image.tmdb.org/t/p';
-  static const String _bearerToken =
-      'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1YmM0ZDAzZGU2MzY1YTBlZWY3ZDBhNGM0YTdkMDAyYiIsIm5iZiI6MTc1NTg2NzY0NS40ODg5OTk4LCJzdWIiOiI2OGE4NjlmZGI0NWEzOGEyNWMyNjEzYWEiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0._zPoKSHku3D5XAsfQ-L46MTKvJTs6cOB07Ij386z4OA';
+  
 
   late final Dio _dio;
   late final TabController _tabController;
@@ -117,7 +116,7 @@ class _AnimeScreenState extends State<AnimeScreen>
   @override
   void initState() {
     super.initState();
-    _dio = Dio(BaseOptions(headers: {'Authorization': 'Bearer $_bearerToken'}));
+    _dio = Dio();
     _tabController = TabController(length: _tabs.length, vsync: this);
     _tabController.addListener(() {
       if (!_tabController.indexIsChanging) {

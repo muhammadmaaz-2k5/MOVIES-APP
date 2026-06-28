@@ -31,6 +31,16 @@ class _Category {
     required this.popularParams,
     this.mediaType = 'movie',
   });
+
+  factory _Category.fromJson(Map<String, dynamic> json) {
+    return _Category(
+      label: json['label'] as String? ?? '',
+      emoji: json['emoji'] as String? ?? '',
+      mediaType: json['media_type'] as String? ?? 'movie',
+      trendingParams: (json['trending_params'] as Map? ?? {}).cast<String, dynamic>(),
+      popularParams: (json['popular_params'] as Map? ?? {}).cast<String, dynamic>(),
+    );
+  }
 }
 
 // ─── Home screen ─────────────────────────────────────────────────────────────
@@ -47,55 +57,14 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   bool _isAppBarBlurred = false;
   SearchFilters _activeFilters = const SearchFilters();
 
-  static const String _tmdbBase = 'https://api.themoviedb.org/3';
+  final String _tmdbBase = AppConfig.tmdbProxyUrl;
   static const String _imageBase = 'https://image.tmdb.org/t/p';
-  static const String _bearerToken =
-      'eyJhbGciOiJIUzI1NiJ9.eyJhdWQiOiI1YmM0ZDAzZGU2MzY1YTBlZWY3ZDBhNGM0YTdkMDAyYiIsIm5iZiI6MTc1NTg2NzY0NS40ODg5OTk4LCJzdWIiOiI2OGE4NjlmZGI0NWEzOGEyNWMyNjEzYWEiLCJzY29wZXMiOlsiYXBpX3JlYWQiXSwidmVyc2lvbiI6MX0._zPoKSHku3D5XAsfQ-L46MTKvJTs6cOB07Ij386z4OA';
+  
 
   late final Dio _dio;
 
-  // Categories — each fetches its own TMDB data
-  static const List<_Category> _categories = [
-    _Category(label: 'All',        emoji: '🌐', mediaType: 'all',
-      trendingParams: {},
-      popularParams:  {'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'Hollywood',  emoji: '🇺🇸', mediaType: 'movie',
-      trendingParams: {'with_original_language': 'en', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'en', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'Bollywood',  emoji: '🇮🇳', mediaType: 'movie',
-      trendingParams: {'with_original_language': 'hi', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'hi', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'Punjabi',    emoji: '🎵', mediaType: 'movie',
-      trendingParams: {'with_original_language': 'pa', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'pa', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'KDrama',     emoji: '🇰🇷', mediaType: 'tv',
-      trendingParams: {'with_original_language': 'ko', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'ko', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'Anime',      emoji: '🇯🇵', mediaType: 'tv',
-      trendingParams: {'with_original_language': 'ja', 'with_genres': '16', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'ja', 'with_genres': '16', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'Turkish',    emoji: '🇹🇷', mediaType: 'tv',
-      trendingParams: {'with_original_language': 'tr', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'tr', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'Arabic',     emoji: '🇸🇦', mediaType: 'movie',
-      trendingParams: {'with_original_language': 'ar', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'ar', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'Chinese',    emoji: '🇨🇳', mediaType: 'movie',
-      trendingParams: {'with_original_language': 'zh', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'zh', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'Spanish',    emoji: '🇪🇸', mediaType: 'movie',
-      trendingParams: {'with_original_language': 'es', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'es', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'French',     emoji: '🇫🇷', mediaType: 'movie',
-      trendingParams: {'with_original_language': 'fr', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'fr', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'Tamil',      emoji: '🎞️', mediaType: 'movie',
-      trendingParams: {'with_original_language': 'ta', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'ta', 'sort_by': 'popularity.desc', 'include_adult': false}),
-    _Category(label: 'Telugu',     emoji: '🎥', mediaType: 'movie',
-      trendingParams: {'with_original_language': 'te', 'sort_by': 'popularity.desc', 'include_adult': false},
-      popularParams:  {'with_original_language': 'te', 'sort_by': 'popularity.desc', 'include_adult': false}),
-  ];
+  List<_Category> _categories = [];
+  bool _isLoadingCategories = true;
 
   int _selectedCategory = 0;
 
@@ -123,15 +92,44 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   void initState() {
     super.initState();
-    _dio = Dio(BaseOptions(headers: {'Authorization': 'Bearer $_bearerToken'}));
+    _dio = Dio();
     _scrollController.addListener(() {
       final shouldBlur = _scrollController.offset > 10;
       if (shouldBlur != _isAppBarBlurred) {
         setState(() => _isAppBarBlurred = shouldBlur);
       }
     });
-    // Pre-fetch All (index 0)
-    _fetchCategory(0);
+    _loadDynamicCategories();
+  }
+
+  Future<void> _loadDynamicCategories() async {
+    try {
+      final url = '${AppConfig.backendBaseUrl}/api/config/categories';
+      final response = await _dio.get(url);
+      final rawList = response.data as List? ?? [];
+      final parsed = rawList.map((c) => _Category.fromJson(c as Map<String, dynamic>)).toList();
+      if (mounted) {
+        setState(() {
+          _categories = parsed;
+          _isLoadingCategories = false;
+        });
+        if (_categories.isNotEmpty) {
+          _fetchCategory(0);
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _categories = const [
+            _Category(label: 'All', emoji: '🌐', mediaType: 'all', trendingParams: {}, popularParams: {}),
+            _Category(label: 'Hollywood', emoji: '🇺🇸', mediaType: 'movie', trendingParams: {'with_original_language': 'en'}, popularParams: {'with_original_language': 'en'}),
+            _Category(label: 'Bollywood', emoji: '🇮🇳', mediaType: 'movie', trendingParams: {'with_original_language': 'hi'}, popularParams: {'with_original_language': 'hi'})
+          ];
+          _isLoadingCategories = false;
+        });
+        _fetchCategory(0);
+      }
+    }
   }
 
   @override
@@ -286,6 +284,15 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
   @override
   Widget build(BuildContext context) {
     final isTablet = MediaQuery.of(context).size.width >= 600;
+
+    if (_isLoadingCategories) {
+      return Scaffold(
+        backgroundColor: AppTheme.backgroundDark,
+        body: const Center(
+          child: CircularProgressIndicator(color: AppTheme.primary),
+        ),
+      );
+    }
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,

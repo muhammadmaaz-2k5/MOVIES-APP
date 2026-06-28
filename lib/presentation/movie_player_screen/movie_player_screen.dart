@@ -1,6 +1,7 @@
 import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:flutter/services.dart';
+import 'package:dio/dio.dart';
 
 import '../../core/app_export.dart';
 import '../../utils/app_actions.dart';
@@ -11,33 +12,48 @@ class VideoServer {
   final String name;
   final String label;
   final String icon;
-  final String Function(Map<String, dynamic> item, {int? season, int? episode}) buildUrl;
+  final String movieUrlTemplate;
+  final String tvUrlTemplate;
 
   const VideoServer({
     required this.name,
     required this.label,
     required this.icon,
-    required this.buildUrl,
+    required this.movieUrlTemplate,
+    required this.tvUrlTemplate,
   });
+
+  factory VideoServer.fromJson(Map<String, dynamic> json) {
+    return VideoServer(
+      name: json['name'] as String? ?? '',
+      label: json['label'] as String? ?? '',
+      icon: json['icon'] as String? ?? '',
+      movieUrlTemplate: json['movie_url_template'] as String? ?? '',
+      tvUrlTemplate: json['tv_url_template'] as String? ?? '',
+    );
+  }
+
+  String buildUrl(Map<String, dynamic> item, {int? season, int? episode}) {
+    final id = item['id'] as int? ?? 0;
+    final type = item['type'] as String? ?? 'movie';
+    if (type == 'tv' && season != null && episode != null) {
+      return tvUrlTemplate
+          .replaceAll('{id}', id.toString())
+          .replaceAll('{season}', season.toString())
+          .replaceAll('{episode}', episode.toString());
+    }
+    return movieUrlTemplate.replaceAll('{id}', id.toString());
+  }
 }
 
-// ─── Available servers ────────────────────────────────────────────────────────
-
-final List<VideoServer> kVideoServers = [
+const List<VideoServer> kVideoServers = [
   VideoServer(
     name: 'vidfast',
     label: 'VidFast',
     icon: '⚡',
-    buildUrl: (item, {season, episode}) {
-      final id    = item['id'] as int? ?? 0;
-      final type  = item['type'] as String? ?? 'movie';
-      final theme = '6C5CE7';
-      if (type == 'tv' && season != null && episode != null) {
-        return 'https://vidfast.pro/tv/$id/$season/$episode?autoPlay=true&theme=$theme&nextButton=true&autoNext=true';
-      }
-      return 'https://vidfast.pro/movie/$id?autoPlay=true&theme=$theme';
-    },
-  ),
+    movieUrlTemplate: 'https://vidfast.pro/movie/{id}?autoPlay=true&theme=6C5CE7',
+    tvUrlTemplate: 'https://vidfast.pro/tv/{id}/{season}/{episode}?autoPlay=true&theme=6C5CE7&nextButton=true&autoNext=true'
+  )
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -56,6 +72,8 @@ class MoviePlayerScreen extends StatefulWidget {
 
 class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
   late WebViewController _controller;
+  List<VideoServer> _servers = [];
+  bool   _isLoadingServers = true;
   int    _serverIndex  = 0;
   bool   _isLoading    = true;
   bool   _hasError     = false;
@@ -66,7 +84,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
   int? get _episode => widget.item['episode'] as int?;
 
   String get _currentUrl =>
-      kVideoServers[_serverIndex].buildUrl(
+      _servers[_serverIndex].buildUrl(
         widget.item,
         season:  _season,
         episode: _episode,
@@ -81,7 +99,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
       DeviceOrientation.landscapeLeft,
       DeviceOrientation.landscapeRight,
     ]);
-    _initController();
+    _loadDynamicServers();
     // Show nudge after 3 seconds
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted && !_nudgeShown) {
@@ -91,6 +109,44 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
         });
       }
     });
+  }
+
+  Future<void> _loadDynamicServers() async {
+    try {
+      final dio = Dio();
+      final id = widget.item['id'] ?? 0;
+      final type = widget.item['type'] ?? 'movie';
+      final url = '${AppConfig.backendBaseUrl}/api/config/servers?id=$id&type=$type&season=${_season ?? ''}&episode=${_episode ?? ''}';
+      
+      final response = await dio.get(url);
+      final rawList = response.data as List? ?? [];
+      final parsed = rawList.map((s) => VideoServer.fromJson(s as Map<String, dynamic>)).toList();
+      if (mounted) {
+        setState(() {
+          _servers = parsed;
+          _isLoadingServers = false;
+        });
+        if (_servers.isNotEmpty) {
+          _initController();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _servers = const [
+            VideoServer(
+              name: 'vidfast',
+              label: 'VidFast',
+              icon: '⚡',
+              movieUrlTemplate: 'https://vidfast.pro/movie/{id}?autoPlay=true&theme=6C5CE7',
+              tvUrlTemplate: 'https://vidfast.pro/tv/{id}/{season}/{episode}?autoPlay=true&theme=6C5CE7&nextButton=true&autoNext=true'
+            )
+          ];
+          _isLoadingServers = false;
+        });
+        _initController();
+      }
+    }
   }
 
   @override
@@ -149,9 +205,18 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
 
   @override
   Widget build(BuildContext context) {
+    if (_isLoadingServers) {
+      return const Scaffold(
+        backgroundColor: Colors.black,
+        body: Center(
+          child: CircularProgressIndicator(color: AppTheme.primary),
+        ),
+      );
+    }
+
     return OrientationBuilder(builder: (context, orientation) {
       final isLandscape = orientation == Orientation.landscape;
-      final server      = kVideoServers[_serverIndex];
+      final server      = _servers[_serverIndex];
 
       // ── LANDSCAPE: fullscreen immersive player ──────────────────
       if (isLandscape) {
@@ -166,7 +231,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
             if (_hasError && !_isLoading)
               _ErrorOverlay(
                 onRetry:      _reload,
-                onNextServer: () => _switchServer((_serverIndex + 1) % kVideoServers.length),
+                onNextServer: () => _switchServer((_serverIndex + 1) % _servers.length),
               ),
             // Exit-fullscreen pill (bottom-right, auto-fades)
             Positioned(
@@ -243,7 +308,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
                 if (_hasError && !_isLoading)
                   _ErrorOverlay(
                     onRetry:      _reload,
-                    onNextServer: () => _switchServer((_serverIndex + 1) % kVideoServers.length),
+                    onNextServer: () => _switchServer((_serverIndex + 1) % _servers.length),
                   ),
                 // Fullscreen button
                 Positioned(bottom: 8, right: 8,
@@ -297,8 +362,8 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
                     const SizedBox(height: 10),
                     Wrap(
                       spacing: 10, runSpacing: 10,
-                      children: List.generate(kVideoServers.length, (i) {
-                        final s        = kVideoServers[i];
+                      children: List.generate(_servers.length, (i) {
+                        final s        = _servers[i];
                         final isActive = i == _serverIndex;
                         return GestureDetector(
                           onTap: () => _switchServer(i),
@@ -426,8 +491,8 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
                   fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
             ]),
           ),
-          ...List.generate(kVideoServers.length, (i) {
-            final s        = kVideoServers[i];
+          ...List.generate(_servers.length, (i) {
+            final s        = _servers[i];
             final isActive = i == _serverIndex;
             return ListTile(
               leading: Container(

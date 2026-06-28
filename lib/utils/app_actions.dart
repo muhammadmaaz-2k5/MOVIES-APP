@@ -6,22 +6,51 @@ import '../core/app_export.dart';
 
 // ─── Share ────────────────────────────────────────────────────────────────────
 
-Future<void> shareItem(Map<String, dynamic> item) async {
+Future<void> shareItem(Map<String, dynamic> item, {BuildContext? context}) async {
   final title   = item['title']    as String? ?? 'Check this out';
   final type    = item['type']     as String? ?? 'movie';
   final id      = item['id']       as int?    ?? 0;
   final typeStr = type == 'tv' ? 'tv' : 'movie';
   final url     = 'https://www.themoviedb.org/$typeStr/$id';
   final text    = '🎬 $title\n\nWatch it on CineTrack!\n$url';
-  await Share.share(text);
+
+  Rect? sharePositionOrigin;
+  if (context != null) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box != null) {
+      sharePositionOrigin = box.localToGlobal(Offset.zero) & box.size;
+    }
+  }
+  sharePositionOrigin ??= const Rect.fromLTWH(0, 0, 100, 100);
+
+  try {
+    // Invoke non-blocking to prevent UI thread lock
+    Share.share(text, sharePositionOrigin: sharePositionOrigin);
+  } catch (e) {
+    debugPrint('Sharing failed: $e');
+  }
 }
 
-Future<void> sharePerson(Map<String, dynamic> person) async {
+Future<void> sharePerson(Map<String, dynamic> person, {BuildContext? context}) async {
   final name = person['name'] as String? ?? 'Actor';
   final id   = person['id']   as int?    ?? 0;
   final url  = 'https://www.themoviedb.org/person/$id';
   final text = '🎭 $name\n\nView on CineTrack!\n$url';
-  await Share.share(text);
+
+  Rect? sharePositionOrigin;
+  if (context != null) {
+    final box = context.findRenderObject() as RenderBox?;
+    if (box != null) {
+      sharePositionOrigin = box.localToGlobal(Offset.zero) & box.size;
+    }
+  }
+  sharePositionOrigin ??= const Rect.fromLTWH(0, 0, 100, 100);
+
+  try {
+    Share.share(text, sharePositionOrigin: sharePositionOrigin);
+  } catch (e) {
+    debugPrint('Sharing failed: $e');
+  }
 }
 
 // ─── Open in browser ─────────────────────────────────────────────────────────
@@ -66,7 +95,7 @@ void showMoreMenu(BuildContext context, Map<String, dynamic> item) {
         _MoreTile(
           icon: Icons.share_rounded,
           label: 'Share',
-          onTap: () { Navigator.pop(sheetCtx); shareItem(item); },
+          onTap: () { Navigator.pop(sheetCtx); shareItem(item, context: context); },
         ),
         _MoreTile(
           icon: Icons.open_in_browser_rounded,
@@ -205,7 +234,7 @@ void showPlayerMoreSheet(BuildContext context, Map<String, dynamic> item) {
             decoration: BoxDecoration(color: const Color(0xFF444466),
                 borderRadius: BorderRadius.circular(2))),
         _MoreTile(icon: Icons.share_rounded, label: 'Share',
-            onTap: () { Navigator.pop(sheetCtx); shareItem(item); }),
+            onTap: () { Navigator.pop(sheetCtx); shareItem(item, context: context); }),
         _MoreTile(icon: Icons.speed_rounded, label: 'Playback speed',
             onTap: () { Navigator.pop(sheetCtx); showSpeedSheet(context); }),
         _MoreTile(icon: Icons.loop_rounded, label: 'Loop video',

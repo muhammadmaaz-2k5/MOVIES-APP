@@ -542,7 +542,7 @@ class _MovieTvShowDetailScreenState extends State<MovieTvShowDetailScreen> {
                       ),
                     ),
                     _CircleNavButton(icon: Icons.share_rounded,
-                        onTap: () => shareItem(item)),
+                        onTap: () => shareItem(item, context: context)),
                     const SizedBox(width: 8),
                     _CircleNavButton(icon: Icons.more_vert_rounded,
                         onTap: () => showMoreMenu(context, item)),

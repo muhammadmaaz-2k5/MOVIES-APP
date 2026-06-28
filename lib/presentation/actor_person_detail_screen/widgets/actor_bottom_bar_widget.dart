@@ -87,7 +87,7 @@ class _ActorBottomBarWidgetState extends State<ActorBottomBarWidget> {
 
                   // ── Share button ───────────────────────────────────
                   GestureDetector(
-                    onTap: () => sharePerson(widget.person),
+                    onTap: () => sharePerson(widget.person, context: context),
                     child: Container(
                       width: 52, height: 52,
                       decoration: BoxDecoration(

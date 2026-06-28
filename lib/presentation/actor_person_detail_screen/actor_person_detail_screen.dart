@@ -313,7 +313,7 @@ class _ActorPersonDetailScreenState extends State<ActorPersonDetailScreen> {
                       ),
                     ),
                     _CircleBackButton(icon: Icons.share_rounded,
-                        onTap: () => sharePerson(person)),
+                        onTap: () => sharePerson(person, context: context)),
                   ],
                 ),
               ),

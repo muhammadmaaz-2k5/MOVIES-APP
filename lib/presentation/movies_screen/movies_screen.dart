@@ -228,8 +228,8 @@ class _MoviesScreenState extends State<MoviesScreen>
         final year         = releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
         return {
           'id': r['id'], 'title': title, 'type': 'movie',
-          'posterUrl':   posterPath   != null ? '$_imageBase/w342$posterPath'   : '',
-          'backdropUrl': backdropPath != null ? '$_imageBase/w780$backdropPath' : '',
+          'posterUrl':   posterPath   != null ? (posterPath.startsWith('http') ? posterPath : '$_imageBase/w342$posterPath')   : '',
+          'backdropUrl': backdropPath != null ? (backdropPath.startsWith('http') ? backdropPath : '$_imageBase/w780$backdropPath') : '',
           'posterSemanticLabel':   'Poster for $title',
           'backdropSemanticLabel': 'Backdrop for $title',
           'rating':   (r['vote_average'] as num?)?.toDouble() ?? 0.0,

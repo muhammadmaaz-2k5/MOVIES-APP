@@ -125,7 +125,7 @@ class _SearchScreenState extends State<SearchScreen> {
           'id': r['id'],
           'title': title,
           'type': isPerson ? 'person' : (mediaType == 'tv' ? 'tv' : 'movie'),
-          'posterUrl': posterPath != null ? '$_imageBase/w342$posterPath' : '',
+          'posterUrl': posterPath != null ? (posterPath.startsWith('http') ? posterPath : '$_imageBase/w342$posterPath') : '',
           'posterSemanticLabel': 'Search result for $title',
           'rating': (r['vote_average'] as num?)?.toDouble() ?? 0.0,
           'year': year,

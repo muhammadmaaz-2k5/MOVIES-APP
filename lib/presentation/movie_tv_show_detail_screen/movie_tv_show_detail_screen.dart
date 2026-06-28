@@ -231,9 +231,11 @@ class _MovieTvShowDetailScreenState extends State<MovieTvShowDetailScreen> {
         'id': detailData['id'] ?? _item['id'],
         'title': title,
         'backdropUrl': backdropPath != null
-            ? '$_imageBase/w1280$backdropPath'
+            ? (backdropPath.startsWith('http') ? backdropPath : '$_imageBase/w1280$backdropPath')
             : '',
-        'posterUrl': posterPath != null ? '$_imageBase/w500$posterPath' : '',
+        'posterUrl': posterPath != null
+            ? (posterPath.startsWith('http') ? posterPath : '$_imageBase/w500$posterPath')
+            : '',
         'backdropSemanticLabel': 'Backdrop image for $title',
         'posterSemanticLabel': 'Poster for $title',
         'rating':

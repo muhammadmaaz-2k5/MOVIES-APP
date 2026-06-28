@@ -97,26 +97,6 @@ void showMoreMenu(BuildContext context, Map<String, dynamic> item) {
           label: 'Share',
           onTap: () { Navigator.pop(sheetCtx); shareItem(item, context: context); },
         ),
-        _MoreTile(
-          icon: Icons.open_in_browser_rounded,
-          label: 'Open on TMDB',
-          onTap: () { Navigator.pop(sheetCtx); openTmdbPage(item); },
-        ),
-        _MoreTile(
-          icon: Icons.report_outlined,
-          label: 'Report an issue',
-          onTap: () {
-            Navigator.pop(sheetCtx);
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(
-                content: Text('Thank you for your report.',
-                    style: GoogleFonts.outfit()),
-                backgroundColor: const Color(0xFF1E1E2E),
-                duration: const Duration(seconds: 2),
-              ),
-            );
-          },
-        ),
         const SizedBox(height: 8),
       ]),
     ),
@@ -239,8 +219,6 @@ void showPlayerMoreSheet(BuildContext context, Map<String, dynamic> item) {
             onTap: () { Navigator.pop(sheetCtx); showSpeedSheet(context); }),
         _MoreTile(icon: Icons.loop_rounded, label: 'Loop video',
             onTap: () { Navigator.pop(sheetCtx); }),
-        _MoreTile(icon: Icons.open_in_browser_rounded, label: 'Open on TMDB',
-            onTap: () { Navigator.pop(sheetCtx); openTmdbPage(item); }),
         const SizedBox(height: 8),
       ]),
     ),

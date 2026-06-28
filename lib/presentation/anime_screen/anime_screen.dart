@@ -423,6 +423,21 @@ class _AnimeScreenState extends State<AnimeScreen>
         ],
       ),
       actions: [
+        // Search icon
+        GestureDetector(
+          onTap: () => context.push(AppRoutes.searchScreen),
+          child: Container(
+            margin: const EdgeInsets.only(right: 8),
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              color: AppTheme.surfaceVariantDark,
+              shape: BoxShape.circle,
+              border: Border.all(color: const Color(0xFF444466)),
+            ),
+            child: const Icon(Icons.search_rounded, size: 18, color: Color(0xFF888899)),
+          ),
+        ),
         GestureDetector(
           onTap: _openFilterSheet,
           child: Container(

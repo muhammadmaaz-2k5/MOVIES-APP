@@ -6,42 +6,7 @@ import '../core/app_export.dart';
 
 // ─── Download link builders ───────────────────────────────────────────────────
 
-class _DownloadSource {
-  final String name;
-  final String icon;
-  final String Function(int id, String type, {int? season, int? episode}) buildUrl;
 
-  const _DownloadSource({
-    required this.name,
-    required this.icon,
-    required this.buildUrl,
-  });
-}
-
-final _kSources = [
-  _DownloadSource(
-    name: 'YTS (Movies)',
-    icon: '🎬',
-    buildUrl: (id, type, {season, episode}) =>
-        'https://yts.mx/browse-movies',
-  ),
-  _DownloadSource(
-    name: 'Archive.org',
-    icon: '📦',
-    buildUrl: (id, type, {season, episode}) =>
-        'https://archive.org/search?query=$id',
-  ),
-  _DownloadSource(
-    name: 'Open Subtitles',
-    icon: '📝',
-    buildUrl: (id, type, {season, episode}) {
-      if (type == 'tv' && season != null && episode != null) {
-        return 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-$id/season-$season/episode-$episode';
-      }
-      return 'https://www.opensubtitles.org/en/search/sublanguageid-all/imdbid-$id';
-    },
-  ),
-];
 
 // ─── Download button ──────────────────────────────────────────────────────────
 
@@ -253,7 +218,7 @@ class _DownloadLinksSheetState extends State<_DownloadLinksSheet> {
               ),
             )
           else if (_links.isEmpty)
-            _buildFallbacks(context, mediaType)
+            _buildEmptyState()
           else
             Flexible(
               child: ListView.builder(
@@ -316,51 +281,34 @@ class _DownloadLinksSheetState extends State<_DownloadLinksSheet> {
     );
   }
 
-  Widget _buildFallbacks(BuildContext context, String mediaType) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        ..._kSources.map((src) {
-          final url = src.buildUrl(widget.tmdbId, mediaType,
-              season: widget.season, episode: widget.episode);
-          return ListTile(
-            contentPadding:
-                const EdgeInsets.symmetric(horizontal: 20, vertical: 2),
-            leading: Container(
-              width: 42, height: 42,
-              decoration: BoxDecoration(
-                color: AppTheme.surfaceVariantDark,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: Center(
-                  child: Text(src.icon,
-                      style: const TextStyle(fontSize: 20)))),
-            title: Text(src.name,
-                style: GoogleFonts.outfit(
-                    color: Colors.white, fontWeight: FontWeight.w600)),
-            subtitle: Text(url,
-                style: GoogleFonts.outfit(
-                    fontSize: 10, color: const Color(0xFF888899)),
-                maxLines: 1, overflow: TextOverflow.ellipsis),
-            trailing: Container(
-              padding: const EdgeInsets.symmetric(
-                  horizontal: 10, vertical: 5),
-              decoration: BoxDecoration(
-                color: AppTheme.primary.withAlpha(20),
-                borderRadius: BorderRadius.circular(8),
-                border: Border.all(
-                    color: AppTheme.primary.withAlpha(80)),
-              ),
-              child: Text('Open',
-                  style: GoogleFonts.outfit(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
-                      color: AppTheme.primary)),
+  Widget _buildEmptyState() {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.info_outline_rounded, color: Color(0xFF888899), size: 40),
+          const SizedBox(height: 12),
+          Text(
+            'No download links added yet',
+            style: GoogleFonts.outfit(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Colors.white,
             ),
-            onTap: () => _open(context, url),
-          );
-        }),
-      ],
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'An admin can add download links via the Download Manager in the Admin Panel.',
+            textAlign: TextAlign.center,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              color: const Color(0xFF888899),
+              height: 1.4,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

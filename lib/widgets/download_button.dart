@@ -138,7 +138,10 @@ class _DownloadLinksSheetState extends State<_DownloadLinksSheet> {
     try {
       final dio = Dio();
       final mediaType = widget.type == 'tv_episode' ? 'tv' : 'movie';
-      final url = '${AppConfig.backendBaseUrl}/api/download-links/$mediaType/${widget.tmdbId}';
+      String url = '${AppConfig.backendBaseUrl}/api/download-links/$mediaType/${widget.tmdbId}';
+      if (widget.type == 'tv_episode' && widget.season != null && widget.episode != null) {
+        url += '?season=${widget.season}&episode=${widget.episode}';
+      }
       final response = await dio.get(url);
       final rawList = response.data as List? ?? [];
       if (mounted) {

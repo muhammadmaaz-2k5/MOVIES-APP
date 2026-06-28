@@ -90,19 +90,37 @@ class _TvShowsScreenState extends State<TvShowsScreen>
     }
 
     try {
-      Response resp;
+      Future<List<Map<String, dynamic>>> customFuture;
+      if (page == 1) {
+        final Map<String, dynamic> customParams = {'type': 'tv'};
+        if (tab.genreId != null) {
+          customParams['genre'] = tab.genreId;
+        } else if (_filters.genre != 'All') {
+          final gid = SearchFilters.genreIds[_filters.genre];
+          if (gid != null) customParams['genre'] = gid;
+        }
+        customFuture = _fetchCustomContent(customParams);
+      } else {
+        customFuture = Future.value(<Map<String, dynamic>>[]);
+      }
+
+      Future<Response> tmdbFuture;
       if (tab.trending && _filters.isDefault) {
-        resp = await _dio.get('$_tmdbBase/trending/tv/week',
+        tmdbFuture = _dio.get('$_tmdbBase/trending/tv/week',
             queryParameters: {'page': page});
       } else {
-        resp = await _dio.get('$_tmdbBase/discover/tv',
+        tmdbFuture = _dio.get('$_tmdbBase/discover/tv',
             queryParameters: _buildParams(tabIdx, page));
       }
 
-      final results = (resp.data['results'] as List? ?? []);
+      final results = await Future.wait([tmdbFuture, customFuture]);
+      final resp = results[0] as Response;
+      final customItems = results[1] as List<Map<String, dynamic>>;
+
+      final tmdbResults = (resp.data['results'] as List? ?? []);
       final totalPages = resp.data['total_pages'] as int? ?? 1;
 
-      final items = results.map<Map<String, dynamic>>((r) {
+      List<Map<String, dynamic>> items = tmdbResults.map<Map<String, dynamic>>((r) {
         final posterPath = r['poster_path'] as String?;
         final backdropPath = r['backdrop_path'] as String?;
         final title = r['name'] ?? r['title'] ?? 'Unknown';
@@ -125,6 +143,12 @@ class _TvShowsScreenState extends State<TvShowsScreen>
         };
       }).toList();
 
+      if (page == 1 && customItems.isNotEmpty) {
+        final customTmdbIds = customItems.map((c) => c['id'] as int).toSet();
+        items = items.where((item) => !customTmdbIds.contains(item['id'] as int)).toList();
+        items = [...customItems, ...items];
+      }
+
       if (mounted) {
         setState(() {
           if (page == 1) {
@@ -145,6 +169,29 @@ class _TvShowsScreenState extends State<TvShowsScreen>
           _fetchingMoreByTab[tabIdx] = false;
         });
       }
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchCustomContent(Map<String, dynamic> params) async {
+    try {
+      final url = '${AppConfig.backendBaseUrl}/api/custom-content';
+      final resp = await _dio.get(url, queryParameters: params);
+      final rawList = resp.data as List? ?? [];
+      return rawList.map<Map<String, dynamic>>((r) {
+        return {
+          'id': r['id'] as int, // tmdb_id
+          'custom_id': r['custom_id'] as int,
+          'title': r['title'] ?? 'Unknown',
+          'type': r['type'] ?? 'tv',
+          'posterUrl': r['posterUrl'] ?? '',
+          'backdropUrl': r['backdropUrl'] ?? '',
+          'rating': (r['rating'] as num?)?.toDouble() ?? 0.0,
+          'year': r['year'] ?? '',
+          'is_custom': true
+        };
+      }).toList();
+    } catch (_) {
+      return [];
     }
   }
 
@@ -307,11 +354,6 @@ class _TvShowsScreenState extends State<TvShowsScreen>
                       color: active > 0 ? AppTheme.primary : const Color(0xFF888899))),
             ]),
           ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.download_rounded, color: Color(0xFF888899)),
-          onPressed: () => context.push(AppRoutes.downloadsScreen),
-          padding: const EdgeInsets.only(right: 12),
         ),
       ],
       bottom: PreferredSize(

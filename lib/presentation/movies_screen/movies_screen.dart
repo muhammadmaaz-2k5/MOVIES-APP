@@ -145,17 +145,43 @@ class _MoviesScreenState extends State<MoviesScreen>
     if (page == 1) { setState(() => _loadingByTab[tabIdx] = true); }
     else           { setState(() => _fetchingMore[tabIdx] = true); }
     try {
-      Response resp;
+      Future<List<Map<String, dynamic>>> customFuture;
+      if (page == 1) {
+        final Map<String, dynamic> customParams = {'type': 'movie'};
+        if (tab.genreId != null) {
+          customParams['genre'] = tab.genreId;
+        } else if (_filters.genre != 'All') {
+          final gid = SearchFilters.genreIds[_filters.genre];
+          if (gid != null) customParams['genre'] = gid;
+        }
+        customFuture = _fetchCustomContent(customParams);
+      } else {
+        customFuture = Future.value(<Map<String, dynamic>>[]);
+      }
+
+      Future<Response> tmdbFuture;
       if (tab.trending && _filters.isDefault) {
-        resp = await _dio.get('$_tmdbBase/trending/movie/week',
+        tmdbFuture = _dio.get('$_tmdbBase/trending/movie/week',
             queryParameters: {'page': page});
       } else {
-        resp = await _dio.get('$_tmdbBase/discover/movie',
+        tmdbFuture = _dio.get('$_tmdbBase/discover/movie',
             queryParameters: _buildParams(tabIdx, page));
       }
-      final results    = (resp.data['results'] as List? ?? []);
+
+      final results = await Future.wait([tmdbFuture, customFuture]);
+      final resp = results[0] as Response;
+      final customItems = results[1] as List<Map<String, dynamic>>;
+
+      final tmdbResults = (resp.data['results'] as List? ?? []);
       final totalPages = resp.data['total_pages'] as int? ?? 1;
-      final items      = _mapItems(results);
+      List<Map<String, dynamic>> items = _mapItems(tmdbResults);
+
+      if (page == 1 && customItems.isNotEmpty) {
+        final customTmdbIds = customItems.map((c) => c['id'] as int).toSet();
+        items = items.where((item) => !customTmdbIds.contains(item['id'] as int)).toList();
+        items = [...customItems, ...items];
+      }
+
       if (mounted) {
         setState(() {
           _itemsByTab[tabIdx]    = page == 1 ? items : [...(_itemsByTab[tabIdx] ?? []), ...items];
@@ -167,6 +193,29 @@ class _MoviesScreenState extends State<MoviesScreen>
       }
     } catch (_) {
       if (mounted) setState(() { _loadingByTab[tabIdx] = false; _fetchingMore[tabIdx] = false; });
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchCustomContent(Map<String, dynamic> params) async {
+    try {
+      final url = '${AppConfig.backendBaseUrl}/api/custom-content';
+      final resp = await _dio.get(url, queryParameters: params);
+      final rawList = resp.data as List? ?? [];
+      return rawList.map<Map<String, dynamic>>((r) {
+        return {
+          'id': r['id'] as int, // tmdb_id
+          'custom_id': r['custom_id'] as int,
+          'title': r['title'] ?? 'Unknown',
+          'type': r['type'] ?? 'movie',
+          'posterUrl': r['posterUrl'] ?? '',
+          'backdropUrl': r['backdropUrl'] ?? '',
+          'rating': (r['rating'] as num?)?.toDouble() ?? 0.0,
+          'year': r['year'] ?? '',
+          'is_custom': true
+        };
+      }).toList();
+    } catch (_) {
+      return [];
     }
   }
 
@@ -273,7 +322,7 @@ class _MoviesScreenState extends State<MoviesScreen>
         GestureDetector(
           onTap: _openFilters,
           child: Container(
-            margin: const EdgeInsets.only(right: 8),
+            margin: const EdgeInsets.only(right: 16),
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             decoration: BoxDecoration(
               color: active > 0 ? AppTheme.primary.withAlpha(30) : AppTheme.surfaceVariantDark,
@@ -296,11 +345,6 @@ class _MoviesScreenState extends State<MoviesScreen>
               ],
             ),
           ),
-        ),
-        IconButton(
-          icon: const Icon(Icons.download_rounded, color: Color(0xFF888899)),
-          onPressed: () => context.push(AppRoutes.downloadsScreen),
-          padding: const EdgeInsets.only(right: 12),
         ),
       ],
       bottom: PreferredSize(

@@ -859,6 +859,8 @@ class _EpisodeTile extends StatelessWidget {
                   type:      'tv_episode',
                   posterUrl: stillUrl,
                   subtitle:  'E$epNum',
+                  season:    episode['seasonNum'] as int?,
+                  episode:   epNum,
                 ),
               ),
             ]),

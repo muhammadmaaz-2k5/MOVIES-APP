@@ -101,13 +101,50 @@ class _HomeSectionsWidgetState extends State<HomeSectionsWidget> {
   final Map<int, List<Map<String, dynamic>>> _previews = {};
   final Map<int, bool> _loading = {};
 
+  List<Map<String, dynamic>> _customExclusives = [];
+  bool _isLoadingCustom = true;
+
+  Future<void> _fetchCustomExclusives() async {
+    if (!mounted) return;
+    setState(() => _isLoadingCustom = true);
+    try {
+      final url = '${AppConfig.backendBaseUrl}/api/custom-content?limit=15';
+      final resp = await _dio.get(url);
+      final rawList = resp.data as List? ?? [];
+      final items = rawList.map<Map<String, dynamic>>((r) {
+        return {
+          'id': r['id'] as int, // tmdb_id
+          'custom_id': r['custom_id'] as int, // database auto-increment ID
+          'title': r['title'] ?? 'Unknown',
+          'type': r['type'] ?? 'movie',
+          'posterUrl': r['posterUrl'] ?? '',
+          'backdropUrl': r['backdropUrl'] ?? '',
+          'rating': (r['rating'] as num?)?.toDouble() ?? 0.0,
+          'year': r['year'] ?? '',
+          'is_custom': true
+        };
+      }).toList();
+      if (mounted) {
+        setState(() {
+          _customExclusives = items;
+          _isLoadingCustom = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() => _isLoadingCustom = false);
+      }
+    }
+  }
+
   @override
   void initState() {
     super.initState();
     _dio = Dio();
+    _fetchCustomExclusives();
     // Stagger loads to avoid hammering the API
     for (int i = 0; i < _sections.length; i++) {
-      Future.delayed(Duration(milliseconds: i * 120), () => _fetchPreview(i));
+      Future.delayed(Duration(milliseconds: (i + 1) * 120), () => _fetchPreview(i));
     }
   }
 
@@ -173,82 +210,152 @@ class _HomeSectionsWidgetState extends State<HomeSectionsWidget> {
   @override
   Widget build(BuildContext context) {
     return Column(
-      children: List.generate(_sections.length, (i) {
-        final section = _sections[i];
-        final items = _previews[i] ?? [];
-        final isLoading = _loading[i] ?? true;
-
-        return Padding(
-          padding: const EdgeInsets.only(bottom: 28),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Section header with More button
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 16),
-                child: Row(
-                  children: [
-                    Text(section.emoji,
-                        style: const TextStyle(fontSize: 20)),
-                    const SizedBox(width: 8),
-                    Expanded(
-                      child: Text(
-                        section.title,
-                        style: GoogleFonts.outfit(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w700,
-                            color: Colors.white),
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                    ),
-                    GestureDetector(
-                      onTap: () => _onMore(context, section),
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 5),
-                        decoration: BoxDecoration(
-                          color: AppTheme.primary.withAlpha(30),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(
-                              color: AppTheme.primary.withAlpha(80)),
-                        ),
+      children: [
+        if (_isLoadingCustom)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Text('💎', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: Text(
-                          'More',
+                          'Custom Exclusives',
                           style: GoogleFonts.outfit(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: AppTheme.primary),
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
-              ),
-              const SizedBox(height: 12),
-              // Horizontal card strip
-              SizedBox(
-                height: 200,
-                child: isLoading
-                    ? _buildSkeletonRow()
-                    : items.isEmpty
-                        ? Center(
-                            child: Text('No results',
-                                style: GoogleFonts.outfit(
-                                    color: const Color(0xFF444466))))
-                        : ListView.separated(
-                            scrollDirection: Axis.horizontal,
-                            padding: const EdgeInsets.symmetric(horizontal: 16),
-                            itemCount: items.length,
-                            separatorBuilder: (_, __) =>
-                                const SizedBox(width: 10),
-                            itemBuilder: (context, j) =>
-                                _SectionCard(item: items[j]),
-                          ),
-              ),
-            ],
+                const SizedBox(height: 12),
+                SizedBox(height: 200, child: _buildSkeletonRow()),
+              ],
+            ),
+          )
+        else if (_customExclusives.isNotEmpty)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      const Text('💎', style: TextStyle(fontSize: 20)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          'Custom Exclusives',
+                          style: GoogleFonts.outfit(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                SizedBox(
+                  height: 200,
+                  child: ListView.separated(
+                    scrollDirection: Axis.horizontal,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _customExclusives.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 10),
+                    itemBuilder: (context, j) =>
+                        _SectionCard(item: _customExclusives[j]),
+                  ),
+                ),
+              ],
+            ),
           ),
-        );
-      }),
+        ...List.generate(_sections.length, (i) {
+          final section = _sections[i];
+          final items = _previews[i] ?? [];
+          final isLoading = _loading[i] ?? true;
+
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 28),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Section header with More button
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: Row(
+                    children: [
+                      Text(section.emoji,
+                          style: const TextStyle(fontSize: 20)),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          section.title,
+                          style: GoogleFonts.outfit(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                              color: Colors.white),
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ),
+                      GestureDetector(
+                        onTap: () => _onMore(context, section),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: AppTheme.primary.withAlpha(30),
+                            borderRadius: BorderRadius.circular(20),
+                            border: Border.all(
+                                color: AppTheme.primary.withAlpha(80)),
+                          ),
+                          child: Text(
+                            'More',
+                            style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primary),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Horizontal card strip
+                SizedBox(
+                  height: 200,
+                  child: isLoading
+                      ? _buildSkeletonRow()
+                      : items.isEmpty
+                          ? Center(
+                              child: Text('No results',
+                                  style: GoogleFonts.outfit(
+                                      color: const Color(0xFF444466))))
+                          : ListView.separated(
+                              scrollDirection: Axis.horizontal,
+                              padding: const EdgeInsets.symmetric(horizontal: 16),
+                              itemCount: items.length,
+                              separatorBuilder: (_, __) =>
+                                  const SizedBox(width: 10),
+                              itemBuilder: (context, j) =>
+                                  _SectionCard(item: items[j]),
+                            ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
     );
   }
 

@@ -215,14 +215,28 @@ class _AnimeScreenState extends State<AnimeScreen>
       setState(() => _loadingMore[tabIdx] = true);
     }
     try {
-      final resp = await _dio.get(
+      Future<List<Map<String, dynamic>>> customFuture;
+      if (page == 1) {
+        // Anime is genre 16 (Animation)
+        final Map<String, dynamic> customParams = {'type': type, 'genre': 16};
+        customFuture = _fetchCustomContent(customParams);
+      } else {
+        customFuture = Future.value(<Map<String, dynamic>>[]);
+      }
+
+      final tmdbFuture = _dio.get(
         '$_tmdbBase/discover/$type',
         queryParameters: _buildParams(tabIdx, page),
       );
-      final results = (resp.data['results'] as List? ?? []);
+
+      final results = await Future.wait([tmdbFuture, customFuture]);
+      final resp = results[0] as Response;
+      final customItems = results[1] as List<Map<String, dynamic>>;
+
+      final tmdbResults = (resp.data['results'] as List? ?? []);
       final totalPages = resp.data['total_pages'] as int? ?? 1;
 
-      final items = results.map<Map<String, dynamic>>((r) {
+      List<Map<String, dynamic>> items = tmdbResults.map<Map<String, dynamic>>((r) {
         final posterPath = r['poster_path'] as String?;
         final backdropPath = r['backdrop_path'] as String?;
         final title = (r['title'] ?? r['name'] ?? 'Unknown') as String;
@@ -245,6 +259,12 @@ class _AnimeScreenState extends State<AnimeScreen>
         };
       }).toList();
 
+      if (page == 1 && customItems.isNotEmpty) {
+        final customTmdbIds = customItems.map((c) => c['id'] as int).toSet();
+        items = items.where((item) => !customTmdbIds.contains(item['id'] as int)).toList();
+        items = [...customItems, ...items];
+      }
+
       if (mounted) {
         setState(() {
           if (page == 1) {
@@ -265,6 +285,29 @@ class _AnimeScreenState extends State<AnimeScreen>
           _loadingMore[tabIdx] = false;
         });
       }
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchCustomContent(Map<String, dynamic> params) async {
+    try {
+      final url = '${AppConfig.backendBaseUrl}/api/custom-content';
+      final resp = await _dio.get(url, queryParameters: params);
+      final rawList = resp.data as List? ?? [];
+      return rawList.map<Map<String, dynamic>>((r) {
+        return {
+          'id': r['id'] as int, // tmdb_id
+          'custom_id': r['custom_id'] as int,
+          'title': r['title'] ?? 'Unknown',
+          'type': r['type'] ?? 'movie',
+          'posterUrl': r['posterUrl'] ?? '',
+          'backdropUrl': r['backdropUrl'] ?? '',
+          'rating': (r['rating'] as num?)?.toDouble() ?? 0.0,
+          'year': r['year'] ?? '',
+          'is_custom': true
+        };
+      }).toList();
+    } catch (_) {
+      return [];
     }
   }
 

@@ -141,46 +141,107 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
 
   Future<void> _fetchCategory(int idx) async {
     if ((_loadingTrending[idx] ?? false) || (_loadingPopular[idx] ?? false)) return;
-    await Future.wait([_fetchTrending(idx), _fetchPopular(idx)]);
+    
+    setState(() {
+      _loadingTrending[idx] = true;
+      _loadingPopular[idx] = true;
+    });
+
+    try {
+      final results = await Future.wait([
+        _fetchTrendingData(idx),
+        _fetchPopularData(idx),
+        _fetchCustomExclusivesForCategory(idx),
+      ]);
+
+      List<Map<String, dynamic>> trendingItems = results[0];
+      List<Map<String, dynamic>> popularItems = results[1];
+      final List<Map<String, dynamic>> customItems = results[2];
+
+      if (customItems.isNotEmpty) {
+        final customTmdbIds = customItems.map((c) => c['id'] as int).toSet();
+        
+        trendingItems = trendingItems.where((item) => !customTmdbIds.contains(item['id'] as int)).toList();
+        popularItems = popularItems.where((item) => !customTmdbIds.contains(item['id'] as int)).toList();
+
+        trendingItems = [...customItems, ...trendingItems];
+        popularItems = [...customItems, ...popularItems];
+      }
+
+      if (mounted) {
+        setState(() {
+          _trendingByCategory[idx] = trendingItems;
+          _popularByCategory[idx] = popularItems.take(8).toList();
+          _loadingTrending[idx] = false;
+          _loadingPopular[idx] = false;
+        });
+      }
+    } catch (_) {
+      if (mounted) {
+        setState(() {
+          _loadingTrending[idx] = false;
+          _loadingPopular[idx] = false;
+        });
+      }
+    }
   }
 
-  Future<void> _fetchTrending(int idx) async {
-    if (!mounted) return;
-    setState(() => _loadingTrending[idx] = true);
+  Future<List<Map<String, dynamic>>> _fetchCustomExclusivesForCategory(int idx) async {
+    final cat = _categories[idx];
+    final Map<String, dynamic> params = {};
+    if (cat.mediaType != 'all') {
+      params['type'] = cat.mediaType;
+    }
+    if (cat.trendingParams.containsKey('with_genres')) {
+      params['genre'] = cat.trendingParams['with_genres'];
+    }
+
+    try {
+      final url = '${AppConfig.backendBaseUrl}/api/custom-content';
+      final resp = await _dio.get(url, queryParameters: params);
+      final rawList = resp.data as List? ?? [];
+      return rawList.map<Map<String, dynamic>>((r) {
+        return {
+          'id': r['id'] as int, // tmdb_id
+          'custom_id': r['custom_id'] as int,
+          'title': r['title'] ?? 'Unknown',
+          'type': r['type'] ?? 'movie',
+          'posterUrl': r['posterUrl'] ?? '',
+          'backdropUrl': r['backdropUrl'] ?? '',
+          'rating': (r['rating'] as num?)?.toDouble() ?? 0.0,
+          'year': r['year'] ?? '',
+          'is_custom': true
+        };
+      }).toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> _fetchTrendingData(int idx) async {
     final cat = _categories[idx];
     try {
-      List<Map<String, dynamic>> items;
       if (cat.mediaType == 'all') {
-        // All: use /trending/all/week
         final resp = await _dio.get('$_tmdbBase/trending/all/week',
             queryParameters: {'page': 1});
-        items = _parseItems(resp.data['results'] as List? ?? [], defaultType: 'movie');
+        return _parseItems(resp.data['results'] as List? ?? [], defaultType: 'movie');
       } else {
         final endpoint = cat.mediaType == 'tv' ? 'tv' : 'movie';
         final resp = await _dio.get('$_tmdbBase/discover/$endpoint',
             queryParameters: {...cat.trendingParams, 'page': 1});
-        items = _parseItems(resp.data['results'] as List? ?? [],
+        return _parseItems(resp.data['results'] as List? ?? [],
             defaultType: cat.mediaType);
       }
-      if (mounted) {
-        setState(() {
-          _trendingByCategory[idx] = items;
-          _loadingTrending[idx] = false;
-        });
-      }
     } catch (_) {
-      if (mounted) setState(() => _loadingTrending[idx] = false);
+      return [];
     }
   }
 
-  Future<void> _fetchPopular(int idx) async {
-    if (!mounted) return;
-    setState(() => _loadingPopular[idx] = true);
+  Future<List<Map<String, dynamic>>> _fetchPopularData(int idx) async {
     final cat = _categories[idx];
     try {
       List<Map<String, dynamic>> items;
       if (cat.mediaType == 'all') {
-        // All popular: discover movies released this month
         final resp = await _dio.get('$_tmdbBase/discover/movie', queryParameters: {
           ...cat.popularParams,
           'release_date.gte': _monthStart,
@@ -188,7 +249,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
           'page': 1,
         });
         items = _parseItems(resp.data['results'] as List? ?? [], defaultType: 'movie');
-        // Fallback to all-time popular if month is sparse
         if (items.length < 4) {
           final fb = await _dio.get('$_tmdbBase/discover/movie',
               queryParameters: {...cat.popularParams, 'page': 1});
@@ -201,14 +261,9 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
         items = _parseItems(resp.data['results'] as List? ?? [],
             defaultType: cat.mediaType);
       }
-      if (mounted) {
-        setState(() {
-          _popularByCategory[idx] = items.take(8).toList();
-          _loadingPopular[idx] = false;
-        });
-      }
+      return items;
     } catch (_) {
-      if (mounted) setState(() => _loadingPopular[idx] = false);
+      return [];
     }
   }
 
@@ -470,11 +525,6 @@ class _HomeScreenState extends State<HomeScreen> with TickerProviderStateMixin {
                         );
                         if (result != null) setState(() => _activeFilters = result);
                       },
-                    ),
-                    const SizedBox(width: 8),
-                    _GlassIconButton(
-                      iconName: 'download_rounded',
-                      onTap: () => context.push(AppRoutes.downloadsScreen),
                     ),
                     const SizedBox(width: 8),
                     _GlassIconButton(iconName: 'notifications_none_rounded', onTap: () {}),

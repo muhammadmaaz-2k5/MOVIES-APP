@@ -99,6 +99,34 @@ class _TvShowsScreenState extends State<TvShowsScreen>
           final gid = SearchFilters.genreIds[_filters.genre];
           if (gid != null) customParams['genre'] = gid;
         }
+        if (_filters.country != 'All' && _filters.country != 'Other') {
+          final code = SearchFilters.countryCodes[_filters.country];
+          if (code != null) customParams['with_origin_country'] = code;
+        }
+        if (_filters.language != 'All') {
+          final code = SearchFilters.languageCodes[_filters.language];
+          if (code != null) customParams['with_original_language'] = code;
+        }
+        final yr = _filters.year;
+        if (yr != 'All' && yr != 'Other') {
+          if (yr.endsWith('s')) {
+            final decade = int.tryParse(yr.replaceAll('s', ''));
+            if (decade != null) {
+              customParams['first_air_date.gte'] = '$decade-01-01';
+              customParams['first_air_date.lte'] = '${decade + 9}-12-31';
+            }
+          } else {
+            customParams['year'] = yr;
+          }
+        }
+        switch (_filters.sortBy) {
+          case 'Rating':
+            customParams['sort_by'] = 'vote_average.desc';
+          case 'Latest':
+            customParams['sort_by'] = 'first_air_date.desc';
+          default:
+            customParams['sort_by'] = 'popularity.desc';
+        }
         customFuture = _fetchCustomContent(customParams);
       } else {
         customFuture = Future.value(<Map<String, dynamic>>[]);

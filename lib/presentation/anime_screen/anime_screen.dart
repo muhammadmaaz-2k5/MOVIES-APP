@@ -219,6 +219,35 @@ class _AnimeScreenState extends State<AnimeScreen>
       if (page == 1) {
         // Anime is genre 16 (Animation)
         final Map<String, dynamic> customParams = {'type': type, 'genre': 16};
+        if (_filters.country != 'All' && _filters.country != 'Other') {
+          final code = AnimeFilters.countryCodes[_filters.country];
+          if (code != null) customParams['with_origin_country'] = code;
+        }
+        final yr = _filters.year;
+        if (yr != 'All' && yr != 'Other') {
+          if (yr.endsWith('s')) {
+            final decade = int.tryParse(yr.replaceAll('s', ''));
+            if (decade != null) {
+              if (type == 'movie') {
+                customParams['primary_release_date.gte'] = '$decade-01-01';
+                customParams['primary_release_date.lte'] = '${decade + 9}-12-31';
+              } else {
+                customParams['first_air_date.gte'] = '$decade-01-01';
+                customParams['first_air_date.lte'] = '${decade + 9}-12-31';
+              }
+            }
+          } else {
+            customParams['year'] = yr;
+          }
+        }
+        switch (_filters.sortBy) {
+          case 'Rating':
+            customParams['sort_by'] = 'vote_average.desc';
+          case 'Latest':
+            customParams['sort_by'] = type == 'movie' ? 'release_date.desc' : 'first_air_date.desc';
+          default:
+            customParams['sort_by'] = 'popularity.desc';
+        }
         customFuture = _fetchCustomContent(customParams);
       } else {
         customFuture = Future.value(<Map<String, dynamic>>[]);

@@ -1,7 +1,10 @@
+import 'dart:async';
+import 'dart:convert';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:webview_flutter/webview_flutter.dart';
 import 'package:flutter/services.dart';
 import 'package:dio/dio.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/app_export.dart';
 import '../../utils/app_actions.dart';
@@ -79,6 +82,10 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
   bool   _hasError     = false;
   bool   _nudgeShown   = false;  // rotate-to-fullscreen nudge
 
+  Timer? _timeoutTimer;
+  bool _errorTriggered = false;
+  int _savedPosition = 0;
+
   // For TV episodes passed via item map
   int? get _season  => widget.item['season']  as int?;
   int? get _episode => widget.item['episode'] as int?;
@@ -151,6 +158,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
 
   @override
   void dispose() {
+    _timeoutTimer?.cancel();
     // Restore portrait-only on exit
     SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
@@ -170,22 +178,694 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
   }
 
+  bool _detectVidsrc(String url) {
+    final lowerUrl = url.toLowerCase();
+    return lowerUrl.contains('vidsrc.icu') || 
+           lowerUrl.contains('vidsrc.to') || 
+           lowerUrl.contains('vidsrc.me') ||
+           lowerUrl.contains('vidsrc.net') ||
+           lowerUrl.contains('vidsrc.xyz') ||
+           lowerUrl.contains('vidsrc.cc') ||
+           lowerUrl.contains('vidfast.pro') ||
+           lowerUrl.contains('vidlink.pro') ||
+           lowerUrl.contains('vidsrc');
+  }
+
+  bool _detectDoodstream(String url) {
+    final lowerUrl = url.toLowerCase();
+    return lowerUrl.contains('doodstream.com') || 
+           lowerUrl.contains('dsvplay.com') || 
+           lowerUrl.contains('dood.to') ||
+           lowerUrl.contains('ds2play.com') ||
+           lowerUrl.contains('ds2video.com');
+  }
+
+  String? _getVideoHostingService(String url) {
+    final lowerUrl = url.toLowerCase();
+    
+    if (lowerUrl.contains('1drv.ms') || 
+        lowerUrl.contains('onedrive.live.com') || 
+        lowerUrl.contains('sharepoint.com')) {
+      return 'onedrive';
+    }
+    
+    if (lowerUrl.contains('doodstream.com') || 
+        lowerUrl.contains('dsvplay.com') || 
+        lowerUrl.contains('dood.to') ||
+        lowerUrl.contains('ds2play.com') ||
+        lowerUrl.contains('ds2video.com')) {
+      return 'doodstream';
+    }
+    
+    if (lowerUrl.contains('vidsrc.icu') || 
+        lowerUrl.contains('vidsrc.to') || 
+        lowerUrl.contains('vidsrc.me') ||
+        lowerUrl.contains('vidsrc.net') ||
+        lowerUrl.contains('vidsrc.xyz') ||
+        lowerUrl.contains('vidsrc.cc') ||
+        lowerUrl.contains('vidfast.pro') ||
+        lowerUrl.contains('vidlink.pro') ||
+        lowerUrl.contains('vidsrc')) {
+      return 'vidsrc';
+    }
+    
+    if (lowerUrl.contains('vidzee.wtf') || 
+        lowerUrl.contains('player.vidzee.wtf')) {
+      return 'vidzee';
+    }
+    
+    if (lowerUrl.contains('videasy.net') || 
+        lowerUrl.contains('player.videasy.net')) {
+      return 'videasy';
+    }
+    
+    if (lowerUrl.contains('vidnest.fun')) {
+      return 'vidnest';
+    }
+    
+    if (lowerUrl.contains('mixdrop.co') || 
+        lowerUrl.contains('mixdrop.to') ||
+        lowerUrl.contains('mixdrop.sx') ||
+        lowerUrl.contains('mixdrop.bz')) {
+      return 'mixdrop';
+    }
+    
+    if (lowerUrl.contains('streamtape.com') || 
+        lowerUrl.contains('streamtape.net') ||
+        lowerUrl.contains('streamtape.to')) {
+      return 'streamtape';
+    }
+    
+    if (lowerUrl.contains('tiktok.com')) return 'tiktok';
+    if (lowerUrl.contains('embedsito.com')) return 'embedsito';
+    if (lowerUrl.contains('embed.su')) return 'embedsu';
+    if (lowerUrl.contains('upstream.to')) return 'upstream';
+    if (lowerUrl.contains('youtube.com') || lowerUrl.contains('youtu.be')) return 'youtube';
+    if (lowerUrl.contains('vimeo.com')) return 'vimeo';
+    if (lowerUrl.contains('dailymotion.com')) return 'dailymotion';
+    if (lowerUrl.contains('streamable.com')) return 'streamable';
+    if (lowerUrl.contains('mdy48tn97.com')) return 'mdy48tn97';
+    if (lowerUrl.contains('vidstream.pro')) return 'vidstream';
+    if (lowerUrl.contains('gogo-stream.com')) return 'gogostream';
+    if (lowerUrl.contains('mp4upload.com')) return 'mp4upload';
+    if (lowerUrl.contains('streamlare.com')) return 'streamlare';
+    if (lowerUrl.contains('filemoon.sx')) return 'filemoon';
+    if (lowerUrl.contains('bilibili.tv') || lowerUrl.contains('bilibili.com')) return 'bilibili';
+    
+    if (lowerUrl.contains('cloudflare.com') || 
+        lowerUrl.contains('cloudfront.net') ||
+        lowerUrl.contains('googleapis.com') ||
+        lowerUrl.contains('gstatic.com') ||
+        lowerUrl.contains('jwpcdn.com') ||
+        lowerUrl.contains('jwplatform.com')) {
+      return 'cdn';
+    }
+    
+    return null;
+  }
+
+  bool _isAllowedVideoHosting(String url) {
+    return _getVideoHostingService(url) != null;
+  }
+
+  bool _shouldBlockNavigation(String url, String currentUrl, bool isVidsrc) {
+    if (url == currentUrl) {
+      return false;
+    }
+    
+    final lowerUrl = url.toLowerCase();
+    
+    if (isVidsrc) {
+      const strictBlockedPatterns = [
+        'doubleclick.net',
+        'googlesyndication.com',
+        'google-analytics.com',
+        'adservice.google',
+        'facebook.com',
+        'twitter.com',
+        'instagram.com',
+        'pinterest.com',
+        'linkedin.com',
+        'reddit.com',
+        'tiktok.com',
+        'snapchat.com',
+        'play.google.com',
+        'apps.apple.com',
+        'itunes.apple.com'
+      ];
+      final shouldBlock = strictBlockedPatterns.any((pattern) => lowerUrl.contains(pattern));
+      if (!shouldBlock) {
+        return false;
+      }
+    }
+    
+    if (_isAllowedVideoHosting(url)) {
+      return false;
+    }
+    
+    const blockedPatterns = [
+      'doubleclick.net',
+      'googlesyndication.com',
+      'google-analytics.com',
+      'adservice.google',
+      'advertising.com',
+      'adnxs.com',
+      'adsystem.com',
+      'adsrvr.org',
+      'adroll.com',
+      'serving-sys.com',
+      'adcolony.com',
+      'applovin.com',
+      'chartboost.com',
+      'unity3d.com',
+      'ironsrc.com',
+      'facebook.com',
+      'twitter.com',
+      'instagram.com',
+      'pinterest.com',
+      'linkedin.com',
+      'reddit.com',
+      'tiktok.com',
+      'snapchat.com',
+      'play.google.com',
+      'apps.apple.com',
+      'itunes.apple.com'
+    ];
+    
+    for (final pattern in blockedPatterns) {
+      if (lowerUrl.contains(pattern)) {
+        return true;
+      }
+    }
+    
+    if (lowerUrl.contains('/app/') || lowerUrl.contains('/apps/')) {
+      return true;
+    }
+    
+    return false;
+  }
+
+  String _buildHtmlContent(String processedUrl, bool isDoodstream, int savedPosition, bool isVidsrc) {
+    final buffer = StringBuffer();
+    buffer.write('<!DOCTYPE html>');
+    buffer.write('<html><head>');
+    buffer.write('<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">');
+    buffer.write('<style>');
+    buffer.write('html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; display: flex; align-items: center; justify-content: center; }');
+    
+    if (processedUrl.contains('youtube.com')) {
+      buffer.write('iframe { width: 100%; height: 100%; border: none; display: block; }');
+      buffer.write('.ytp-pause-overlay { display: none !important; }');
+    } else if (isDoodstream) {
+      buffer.write('iframe { width: 100%; height: 100%; border: none; display: block; margin: 0 auto; }');
+    } else {
+      buffer.write('iframe { width: 100%; height: 100%; border: none; display: block; }');
+    }
+    buffer.write('</style>');
+    
+    if (isDoodstream && savedPosition > 0) {
+      buffer.write('<script>');
+      buffer.write('''
+          (function() {
+              var savedPosition = $savedPosition;
+              var positionRestored = false;
+              var iframe = null;
+              
+              function tryRestorePosition() {
+                  if (positionRestored || savedPosition <= 0) return;
+                  
+                  try {
+                      iframe = document.querySelector('iframe');
+                      if (!iframe) {
+                          setTimeout(tryRestorePosition, 500);
+                          return;
+                      }
+                      
+                      try {
+                          var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                          var video = iframeDoc.querySelector('video');
+                          
+                          if (video) {
+                              video.currentTime = savedPosition;
+                              positionRestored = true;
+                              console.log('Position restored to: ' + savedPosition);
+                          } else {
+                              var players = iframeDoc.querySelectorAll('[class*="player"], [id*="player"], video, [class*="video"], [id*="video"]');
+                              for (var i = 0; i < players.length; i++) {
+                                  if (players[i].tagName === 'VIDEO' || players[i].currentTime !== undefined) {
+                                      players[i].currentTime = savedPosition;
+                                      positionRestored = true;
+                                      console.log('Position restored to: ' + savedPosition);
+                                      break;
+                                  }
+                              }
+                          }
+                      } catch (e) {
+                          iframe.contentWindow.postMessage({
+                              type: 'seek',
+                              time: savedPosition
+                          }, '*');
+                          
+                          setTimeout(function() {
+                              try {
+                                  var script = iframe.contentDocument.createElement('script');
+                                  script.textContent = "if (document.querySelector('video')) { document.querySelector('video').currentTime = " + savedPosition + "; }";
+                                  iframe.contentDocument.head.appendChild(script);
+                              } catch (err) {
+                                  console.log('Cannot inject script due to CORS');
+                              }
+                          }, 2000);
+                      }
+                  } catch (e) {
+                      console.log('Error restoring position: ' + e.message);
+                  }
+              }
+              
+              window.addEventListener('load', function() {
+                  setTimeout(tryRestorePosition, 1000);
+                  setTimeout(tryRestorePosition, 3000);
+                  setTimeout(tryRestorePosition, 5000);
+              });
+              
+              document.addEventListener('DOMContentLoaded', function() {
+                  setTimeout(tryRestorePosition, 1000);
+              });
+          })();
+      ''');
+      buffer.write('</script>');
+    }
+    
+    final bodyStyle = isDoodstream
+        ? "margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center;"
+        : "margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;";
+        
+    buffer.write('</head><body style="$bodyStyle">');
+    
+    final iframeBaseStyle = isDoodstream
+        ? "width: 100%; height: 100%; border: none; display: block; margin: 0 auto;"
+        : "width: 100%; height: 100%; border: none; display: block;";
+        
+    buffer.write('<iframe id="video-iframe" src="$processedUrl" allowfullscreen');
+    if (isVidsrc) {
+      buffer.write(' allow="autoplay; fullscreen; picture-in-picture; encrypted-media"');
+    }
+    if (processedUrl.contains('youtube.com')) {
+      buffer.write(' allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"');
+    }
+    buffer.write(' style="$iframeBaseStyle"></iframe>');
+    
+    if (isDoodstream) {
+      buffer.write('<script>');
+      buffer.write('''
+          (function() {
+              var videoUrl = '$processedUrl';
+              var positionInterval = null;
+              var lastSavedPosition = 0;
+              
+              function savePosition(position) {
+                  if (position > 0 && Math.abs(position - lastSavedPosition) >= 5) {
+                      lastSavedPosition = position;
+                      
+                      try {
+                          if (window.Android && window.Android.postMessage) {
+                              window.Android.postMessage(JSON.stringify({
+                                  event: 'savePlaybackPosition',
+                                  videoUrl: videoUrl,
+                                  position: Math.floor(position)
+                              }));
+                          }
+                      } catch (e) {
+                          console.log('Error calling Android postMessage: ' + e.message);
+                      }
+                  }
+              }
+              
+              function trackPosition() {
+                  try {
+                      var iframe = document.getElementById('video-iframe');
+                      if (!iframe) return;
+                      
+                      try {
+                          var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                          var video = iframeDoc.querySelector('video');
+                          
+                          if (video) {
+                              if (!video.paused) {
+                                  savePosition(video.currentTime);
+                              }
+                          }
+                      } catch (e) {
+                          iframe.contentWindow.postMessage({type: 'getCurrentTime'}, '*');
+                      }
+                  } catch (e) {
+                      console.log('Error tracking position: ' + e.message);
+                  }
+              }
+              
+              window.addEventListener('message', function(event) {
+                  if (event.data && event.data.type === 'currentTime') {
+                      savePosition(event.data.time);
+                  }
+              });
+              
+              if (positionInterval) clearInterval(positionInterval);
+              positionInterval = setInterval(trackPosition, 5000);
+              
+              window.addEventListener('beforeunload', function() {
+                  trackPosition();
+              });
+          })();
+      ''');
+      buffer.write('</script>');
+    }
+    
+    buffer.write('</body></html>');
+    return buffer.toString();
+  }
+
+  Future<void> _loadSavedPosition() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'playback_position_\${_currentUrl.hashCode}';
+      final val = prefs.getInt(key) ?? 0;
+      if (mounted) {
+        setState(() {
+          _savedPosition = val;
+        });
+      }
+    } catch (_) {}
+  }
+
+  Future<void> _savePlaybackPosition(String url, int position) async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'playback_position_\${url.hashCode}';
+      await prefs.setInt(key, position);
+    } catch (_) {}
+  }
+
+  void _startTimeoutTimer() {
+    _timeoutTimer?.cancel();
+    _errorTriggered = false;
+    
+    final isVidsrc = _detectVidsrc(_currentUrl);
+    
+    _timeoutTimer = Timer(const Duration(seconds: 20), () {
+      if (mounted && _isLoading && !_errorTriggered) {
+        setState(() {
+          _isLoading = false;
+        });
+        if (!isVidsrc) {
+          setState(() {
+            _hasError = true;
+            _errorTriggered = true;
+          });
+          _autoSwitchServer();
+        } else {
+          setState(() {
+            _hasError = false;
+          });
+        }
+      }
+    });
+  }
+
+  void _autoSwitchServer() {
+    if (_servers.length <= 1) return;
+    final nextIdx = (_serverIndex + 1) % _servers.length;
+    
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('Server \${_servers[_serverIndex].label} failed. Switching to \${_servers[nextIdx].label}...',
+            style: GoogleFonts.outfit()),
+        backgroundColor: AppTheme.surfaceDark,
+        duration: const Duration(seconds: 2),
+      ),
+    );
+    
+    _switchServer(nextIdx);
+  }
+
+  void _checkVideoAvailability() {
+    final isVidsrc = _detectVidsrc(_currentUrl);
+    if (isVidsrc) {
+      Future.delayed(const Duration(seconds: 2), () {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _hasError = false;
+          });
+        }
+      });
+      return;
+    }
+    
+    Future.delayed(const Duration(seconds: 3), () async {
+      if (!mounted) return;
+      try {
+        final result = await _controller.runJavaScriptReturningResult('''
+            (function() {
+                try {
+                    var iframe = document.getElementById('video-iframe');
+                    if (!iframe) {
+                        return JSON.stringify({hasVideo: false, reason: 'no_iframe'});
+                    }
+                    
+                    try {
+                        var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        var video = iframeDoc.querySelector('video');
+                        var hasVideo = video !== null;
+                        
+                        var bodyText = iframeDoc.body ? iframeDoc.body.innerText.toLowerCase() : '';
+                        var hasError = bodyText.includes('error') || 
+                                       bodyText.includes('not found') || 
+                                       bodyText.includes('404') ||
+                                       bodyText.includes('unavailable') ||
+                                       bodyText.includes('not available');
+                        
+                        return JSON.stringify({
+                            hasVideo: hasVideo && !hasError,
+                            reason: hasError ? 'error_page' : (hasVideo ? 'video_found' : 'no_video')
+                        });
+                    } catch (e) {
+                        return JSON.stringify({hasVideo: true, reason: 'cors_blocked'});
+                    }
+                } catch (e) {
+                    return JSON.stringify({hasVideo: false, reason: 'check_failed'});
+                }
+            })();
+        ''');
+        
+        final resultStr = result.toString().replaceAll('"', '').trim();
+        final hasVideo = resultStr.contains('hasVideo:true') || 
+                         resultStr.contains('reason:cors_blocked') || 
+                         resultStr.contains('reason:check_failed');
+                         
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+          });
+          if (!hasVideo && !_errorTriggered) {
+            setState(() {
+              _hasError = true;
+              _errorTriggered = true;
+            });
+            _autoSwitchServer();
+          } else {
+            setState(() {
+              _hasError = false;
+            });
+          }
+        }
+      } catch (e) {
+        if (mounted) {
+          setState(() {
+            _isLoading = false;
+            _hasError = false;
+          });
+        }
+      }
+    });
+  }
+
+  Future<void> _loadCurrentContent() async {
+    _timeoutTimer?.cancel();
+    _startTimeoutTimer();
+    
+    await _loadSavedPosition();
+    
+    final isYoutube = _currentUrl.contains('youtube.com') || _currentUrl.contains('youtu.be');
+    final isDoodstream = _detectDoodstream(_currentUrl);
+    final isVidsrc = _detectVidsrc(_currentUrl);
+    
+    if (isYoutube) {
+      _controller.loadRequest(Uri.parse(_currentUrl));
+    } else {
+      final html = _buildHtmlContent(_currentUrl, isDoodstream, _savedPosition, isVidsrc);
+      _controller.loadHtmlString(html, baseUrl: _currentUrl);
+    }
+  }
+
   void _initController() {
+    final isVidsrc = _detectVidsrc(_currentUrl);
+    
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
+      ..addJavaScriptChannel(
+        'Android',
+        onMessageReceived: (JavaScriptMessage message) {
+          try {
+            final data = jsonDecode(message.message);
+            if (data['event'] == 'savePlaybackPosition') {
+              final url = data['videoUrl'] as String;
+              final pos = data['position'] as int;
+              if (url.isNotEmpty && pos > 0) {
+                _savePlaybackPosition(url, pos);
+              }
+            }
+          } catch (_) {}
+        },
+      )
       ..setNavigationDelegate(NavigationDelegate(
         onPageStarted: (_) {
-          if (mounted) setState(() { _isLoading = true; _hasError = false; });
+          if (mounted) {
+            setState(() {
+              _isLoading = true;
+              _hasError = false;
+            });
+          }
         },
-        onPageFinished: (_) {
-          if (mounted) setState(() => _isLoading = false);
+        onPageFinished: (url) {
+          _checkVideoAvailability();
+          
+          final isDoodstream = _detectDoodstream(_currentUrl);
+          if (isDoodstream && _savedPosition > 0) {
+            final isNewLoad = url == _currentUrl;
+            if (isNewLoad) {
+              Future.delayed(const Duration(seconds: 2), () {
+                if (!mounted) return;
+                final restoreScript = '''
+                    (function() {
+                        var savedPosition = $_savedPosition;
+                        var attempts = 0;
+                        var maxAttempts = 10;
+                        
+                        function tryRestore() {
+                            attempts++;
+                            try {
+                                var iframe = document.getElementById('video-iframe');
+                                if (!iframe) {
+                                    if (attempts < maxAttempts) {
+                                        setTimeout(tryRestore, 1000);
+                                    }
+                                    return;
+                                }
+                                
+                                try {
+                                    var iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                                    var video = iframeDoc.querySelector('video');
+                                    
+                                    if (video && video.readyState >= 2) {
+                                        if (video.currentTime > 1 && Math.abs(video.currentTime - savedPosition) > 30) {
+                                            console.log('Video already playing, skipping position restore');
+                                            return;
+                                        }
+                                        
+                                        if (video.currentTime < 5 || Math.abs(video.currentTime - savedPosition) < 30) {
+                                            video.currentTime = savedPosition;
+                                            console.log('Position restored to: ' + savedPosition);
+                                            return;
+                                        }
+                                    }
+                                } catch (e) {
+                                    iframe.contentWindow.postMessage({
+                                        type: 'seek',
+                                        time: savedPosition
+                                    }, '*');
+                                }
+                                
+                                if (attempts < maxAttempts) {
+                                    setTimeout(tryRestore, 1000);
+                                }
+                            } catch (e) {
+                                console.log('Error restoring position: ' + e.message);
+                            }
+                        }
+                        
+                        setTimeout(tryRestore, 2000);
+                    })();
+                ''';
+                _controller.runJavaScript(restoreScript);
+              });
+            }
+          }
         },
-        onWebResourceError: (_) {
-          if (mounted) setState(() { _isLoading = false; _hasError = true; });
+        onWebResourceError: (error) {
+          debugPrint("WebView Error (\${error.errorCode}): \${error.description} for URL: \${error.failingUrl}");
+          
+          if (isVidsrc) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _hasError = false;
+              });
+            }
+            return;
+          }
+          
+          if (!_errorTriggered) {
+            if (mounted) {
+              setState(() {
+                _isLoading = false;
+                _hasError = true;
+                _errorTriggered = true;
+              });
+            }
+            _autoSwitchServer();
+          }
         },
-      ))
-      ..loadRequest(Uri.parse(_currentUrl));
+        onNavigationRequest: (NavigationRequest request) {
+          final url = request.url;
+          final isMain = request.isMainFrame;
+          
+          if (isMain) {
+            if (url != _currentUrl) {
+              debugPrint("🚫 Blocked main frame navigation (frame busting): \$url");
+              return NavigationDecision.prevent;
+            }
+          }
+          
+          if (_shouldBlockNavigation(url, _currentUrl, isVidsrc)) {
+            debugPrint("🚫 Blocked navigation: \$url");
+            return NavigationDecision.prevent;
+          }
+          
+          if (isVidsrc) {
+            return NavigationDecision.navigate;
+          }
+          
+          final isDoodstream = _detectDoodstream(_currentUrl);
+          if (isDoodstream) {
+            bool sameDomain = false;
+            try {
+              final processedDomain = Uri.parse(_currentUrl).host;
+              final requestDomain = Uri.parse(url).host;
+              sameDomain = requestDomain == processedDomain || 
+                           requestDomain.endsWith('.\$processedDomain') ||
+                           processedDomain.endsWith('.\$requestDomain');
+            } catch (_) {}
+            
+            if (sameDomain) {
+              return NavigationDecision.navigate;
+            }
+          }
+          
+          return NavigationDecision.navigate;
+        },
+      ));
+      
+      _loadCurrentContent();
   }
 
   void _switchServer(int idx) {
@@ -195,12 +875,12 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
       _isLoading   = true;
       _hasError    = false;
     });
-    _controller.loadRequest(Uri.parse(_currentUrl));
+    _loadCurrentContent();
   }
 
   void _reload() {
     setState(() { _isLoading = true; _hasError = false; });
-    _controller.reload();
+    _loadCurrentContent();
   }
 
   @override

@@ -50,10 +50,14 @@ class _SearchScreenState extends State<SearchScreen>
   late final Animation<double> _fadeAnim;
 
   static const List<_TypeOption> _typeFilters = [
-    _TypeOption(label: 'All',       icon: Icons.apps_rounded,      value: 'all'),
-    _TypeOption(label: 'Movies',    icon: Icons.movie_outlined,    value: 'movie'),
-    _TypeOption(label: 'TV Shows',  icon: Icons.tv_outlined,       value: 'tv'),
-    _TypeOption(label: 'People',    icon: Icons.person_outline_rounded, value: 'person'),
+    _TypeOption(label: 'All', icon: Icons.apps_rounded, value: 'all'),
+    _TypeOption(label: 'Movies', icon: Icons.movie_outlined, value: 'movie'),
+    _TypeOption(label: 'TV Shows', icon: Icons.tv_outlined, value: 'tv'),
+    _TypeOption(
+      label: 'People',
+      icon: Icons.person_outline_rounded,
+      value: 'person',
+    ),
   ];
 
   @override
@@ -61,10 +65,13 @@ class _SearchScreenState extends State<SearchScreen>
     super.initState();
     _dio = Dio();
     _animCtrl = AnimationController(
-        vsync: this, duration: const Duration(milliseconds: 350));
+      vsync: this,
+      duration: const Duration(milliseconds: 350),
+    );
     _fadeAnim = CurvedAnimation(parent: _animCtrl, curve: Curves.easeOut);
-    WidgetsBinding.instance
-        .addPostFrameCallback((_) => _focusNode.requestFocus());
+    WidgetsBinding.instance.addPostFrameCallback(
+      (_) => _focusNode.requestFocus(),
+    );
   }
 
   @override
@@ -89,7 +96,9 @@ class _SearchScreenState extends State<SearchScreen>
     }
     setState(() => _isLoading = true);
     _debounce = Timer(
-        const Duration(milliseconds: 400), () => _search(value.trim()));
+      const Duration(milliseconds: 400),
+      () => _search(value.trim()),
+    );
   }
 
   Map<String, dynamic> _buildQueryParams(String q) {
@@ -125,28 +134,31 @@ class _SearchScreenState extends State<SearchScreen>
     });
     _animCtrl.reset();
     try {
-      final endpoint =
-          _selectedType == 'all' ? 'search/multi' : 'search/$_selectedType';
-      final resp = await _dio.get('$_tmdbBase/$endpoint',
-          queryParameters: _buildQueryParams(q));
+      final endpoint = _selectedType == 'all'
+          ? 'search/multi'
+          : 'search/$_selectedType';
+      final resp = await _dio.get(
+        '$_tmdbBase/$endpoint',
+        queryParameters: _buildQueryParams(q),
+      );
 
       var items = (resp.data['results'] as List? ?? []).map((r) {
         final mediaType = r['media_type'] as String? ?? _selectedType;
         final isPerson = mediaType == 'person';
-        final posterPath =
-            isPerson ? r['profile_path'] as String? : r['poster_path'] as String?;
+        final posterPath = isPerson
+            ? r['profile_path'] as String?
+            : r['poster_path'] as String?;
         final title = r['title'] ?? r['name'] ?? 'Unknown';
         final releaseDate = r['release_date'] ?? r['first_air_date'] ?? '';
-        final year =
-            releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
+        final year = releaseDate.length >= 4 ? releaseDate.substring(0, 4) : '';
         return <String, dynamic>{
           'id': r['id'],
           'title': title,
           'type': isPerson ? 'person' : (mediaType == 'tv' ? 'tv' : 'movie'),
           'posterUrl': posterPath != null
               ? (posterPath.startsWith('http')
-                  ? posterPath
-                  : '$_imageBase/w342$posterPath')
+                    ? posterPath
+                    : '$_imageBase/w342$posterPath')
               : '',
           'posterSemanticLabel': 'Search result for $title',
           'rating': (r['vote_average'] as num?)?.toDouble() ?? 0.0,
@@ -169,14 +181,20 @@ class _SearchScreenState extends State<SearchScreen>
       // Client-side sort
       switch (_filters.sortBy) {
         case 'Rating':
-          items.sort((a, b) =>
-              ((b['rating'] as double).compareTo(a['rating'] as double)));
+          items.sort(
+            (a, b) =>
+                ((b['rating'] as double).compareTo(a['rating'] as double)),
+          );
         case 'Latest':
           items.sort(
-              (a, b) => (b['year'] as String).compareTo(a['year'] as String));
+            (a, b) => (b['year'] as String).compareTo(a['year'] as String),
+          );
         default:
-          items.sort((a, b) => ((b['popularity'] as double)
-              .compareTo(a['popularity'] as double)));
+          items.sort(
+            (a, b) => ((b['popularity'] as double).compareTo(
+              a['popularity'] as double,
+            )),
+          );
       }
 
       if (mounted) {
@@ -223,7 +241,15 @@ class _SearchScreenState extends State<SearchScreen>
 
   void _onSuggestionTap(String suggestion) {
     // Strip emoji prefix
-    final q = suggestion.replaceAll(RegExp(r'^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+', unicode: true), '').trim();
+    final q = suggestion
+        .replaceAll(
+          RegExp(
+            r'^[\p{Emoji_Presentation}\p{Extended_Pictographic}\s]+',
+            unicode: true,
+          ),
+          '',
+        )
+        .trim();
     final clean = q.isNotEmpty ? q : suggestion;
     _controller.text = clean;
     _onQueryChanged(clean);
@@ -265,8 +291,11 @@ class _SearchScreenState extends State<SearchScreen>
                 shape: BoxShape.circle,
                 border: Border.all(color: const Color(0xFF444466)),
               ),
-              child: const Icon(Icons.arrow_back_ios_new_rounded,
-                  size: 16, color: Colors.white),
+              child: const Icon(
+                Icons.arrow_back_ios_new_rounded,
+                size: 16,
+                color: Colors.white,
+              ),
             ),
           ),
           const SizedBox(width: 10),
@@ -313,14 +342,13 @@ class _SearchScreenState extends State<SearchScreen>
             child: AnimatedContainer(
               duration: const Duration(milliseconds: 200),
               curve: Curves.easeOut,
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
               decoration: BoxDecoration(
                 gradient: selected
                     ? LinearGradient(
                         colors: [
                           AppTheme.primary,
-                          AppTheme.primary.withOpacity(0.75)
+                          AppTheme.primary.withValues(alpha: 0.75),
                         ],
                         begin: Alignment.topLeft,
                         end: Alignment.bottomRight,
@@ -329,18 +357,16 @@ class _SearchScreenState extends State<SearchScreen>
                 color: selected ? null : const Color(0xFF1E1E2E),
                 borderRadius: BorderRadius.circular(22),
                 border: Border.all(
-                  color: selected
-                      ? AppTheme.primary
-                      : const Color(0xFF444466),
+                  color: selected ? AppTheme.primary : const Color(0xFF444466),
                   width: 1,
                 ),
                 boxShadow: selected
                     ? [
                         BoxShadow(
-                          color: AppTheme.primary.withOpacity(0.3),
+                          color: AppTheme.primary.withValues(alpha: 0.3),
                           blurRadius: 8,
                           offset: const Offset(0, 2),
-                        )
+                        ),
                       ]
                     : null,
               ),
@@ -350,21 +376,15 @@ class _SearchScreenState extends State<SearchScreen>
                   Icon(
                     f.icon,
                     size: 13,
-                    color: selected
-                        ? Colors.white
-                        : const Color(0xFF888899),
+                    color: selected ? Colors.white : const Color(0xFF888899),
                   ),
                   const SizedBox(width: 5),
                   Text(
                     f.label,
                     style: GoogleFonts.outfit(
                       fontSize: 12,
-                      fontWeight: selected
-                          ? FontWeight.w600
-                          : FontWeight.w400,
-                      color: selected
-                          ? Colors.white
-                          : const Color(0xFF888899),
+                      fontWeight: selected ? FontWeight.w600 : FontWeight.w400,
+                      color: selected ? Colors.white : const Color(0xFF888899),
                     ),
                   ),
                 ],
@@ -402,13 +422,16 @@ class _SearchScreenState extends State<SearchScreen>
                 shape: BoxShape.circle,
                 gradient: RadialGradient(
                   colors: [
-                    AppTheme.primary.withOpacity(0.25),
+                    AppTheme.primary.withValues(alpha: 0.25),
                     Colors.transparent,
                   ],
                 ),
               ),
-              child: Icon(Icons.search_rounded,
-                  size: 40, color: AppTheme.primary.withOpacity(0.7)),
+              child: Icon(
+                Icons.search_rounded,
+                size: 40,
+                color: AppTheme.primary.withValues(alpha: 0.7),
+              ),
             ),
           ),
           const SizedBox(height: 16),
@@ -451,7 +474,9 @@ class _SearchScreenState extends State<SearchScreen>
                 onTap: () => _onSuggestionTap(s),
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 14, vertical: 8),
+                    horizontal: 14,
+                    vertical: 8,
+                  ),
                   decoration: BoxDecoration(
                     color: const Color(0xFF1E1E2E),
                     borderRadius: BorderRadius.circular(20),
@@ -508,14 +533,19 @@ class _SearchScreenState extends State<SearchScreen>
                 color: AppTheme.surfaceVariantDark,
                 shape: BoxShape.circle,
               ),
-              child: const Icon(Icons.search_off_rounded,
-                  size: 38, color: Color(0xFF444466)),
+              child: const Icon(
+                Icons.search_off_rounded,
+                size: 38,
+                color: Color(0xFF444466),
+              ),
             ),
             const SizedBox(height: 20),
             Text(
               'No results for',
               style: GoogleFonts.outfit(
-                  fontSize: 14, color: const Color(0xFF888899)),
+                fontSize: 14,
+                color: const Color(0xFF888899),
+              ),
             ),
             const SizedBox(height: 4),
             Text(
@@ -531,7 +561,9 @@ class _SearchScreenState extends State<SearchScreen>
             Text(
               'Try a different spelling or search term',
               style: GoogleFonts.outfit(
-                  fontSize: 13, color: const Color(0xFF888899)),
+                fontSize: 13,
+                color: const Color(0xFF888899),
+              ),
               textAlign: TextAlign.center,
             ),
             if (!_filters.isDefault) ...[
@@ -543,11 +575,15 @@ class _SearchScreenState extends State<SearchScreen>
                 },
                 child: Container(
                   padding: const EdgeInsets.symmetric(
-                      horizontal: 20, vertical: 10),
+                    horizontal: 20,
+                    vertical: 10,
+                  ),
                   decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.15),
+                    color: AppTheme.primary.withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(22),
-                    border: Border.all(color: AppTheme.primary.withOpacity(0.5)),
+                    border: Border.all(
+                      color: AppTheme.primary.withValues(alpha: 0.5),
+                    ),
                   ),
                   child: Text(
                     'Clear filters & retry',
@@ -575,8 +611,7 @@ class _SearchScreenState extends State<SearchScreen>
         children: [
           // Result count + active filter chips
           Padding(
-            padding:
-                const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
             child: Row(
               children: [
                 Expanded(
@@ -671,17 +706,17 @@ class _SearchInputBoxState extends State<_SearchInputBox> {
         borderRadius: BorderRadius.circular(14),
         border: Border.all(
           color: _focused
-              ? AppTheme.primary.withOpacity(0.7)
+              ? AppTheme.primary.withValues(alpha: 0.7)
               : const Color(0xFF444466),
           width: _focused ? 1.5 : 1,
         ),
         boxShadow: _focused
             ? [
                 BoxShadow(
-                  color: AppTheme.primary.withOpacity(0.15),
+                  color: AppTheme.primary.withValues(alpha: 0.15),
                   blurRadius: 12,
                   offset: const Offset(0, 4),
-                )
+                ),
               ]
             : null,
       ),
@@ -705,7 +740,9 @@ class _SearchInputBoxState extends State<_SearchInputBox> {
               decoration: InputDecoration(
                 hintText: 'Search movies, shows, people…',
                 hintStyle: GoogleFonts.outfit(
-                    color: const Color(0xFF888899), fontSize: 15),
+                  color: const Color(0xFF888899),
+                  fontSize: 15,
+                ),
                 border: InputBorder.none,
                 isDense: true,
                 contentPadding: EdgeInsets.zero,
@@ -727,8 +764,11 @@ class _SearchInputBoxState extends State<_SearchInputBox> {
                           color: const Color(0xFF444466),
                           shape: BoxShape.circle,
                         ),
-                        child: const Icon(Icons.close_rounded,
-                            size: 13, color: Colors.white),
+                        child: const Icon(
+                          Icons.close_rounded,
+                          size: 13,
+                          color: Colors.white,
+                        ),
                       ),
                     ),
                   )
@@ -759,11 +799,13 @@ class _FilterBtn extends StatelessWidget {
         height: 46,
         decoration: BoxDecoration(
           color: active
-              ? AppTheme.primary.withOpacity(0.15)
+              ? AppTheme.primary.withValues(alpha: 0.15)
               : const Color(0xFF1E1E2E),
           borderRadius: BorderRadius.circular(14),
           border: Border.all(
-            color: active ? AppTheme.primary.withOpacity(0.6) : const Color(0xFF444466),
+            color: active
+                ? AppTheme.primary.withValues(alpha: 0.6)
+                : const Color(0xFF444466),
           ),
         ),
         child: Stack(
@@ -785,7 +827,9 @@ class _FilterBtn extends StatelessWidget {
                     color: AppTheme.primary,
                     shape: BoxShape.circle,
                     border: Border.all(
-                        color: const Color(0xFF1E1E2E), width: 1.5),
+                      color: const Color(0xFF1E1E2E),
+                      width: 1.5,
+                    ),
                   ),
                 ),
               ),
@@ -831,30 +875,41 @@ class _ActiveFiltersRow extends StatelessWidget {
               scrollDirection: Axis.horizontal,
               child: Row(
                 children: chips
-                    .map((c) => Container(
-                          margin: const EdgeInsets.only(right: 6),
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 10, vertical: 4),
-                          decoration: BoxDecoration(
-                            color: AppTheme.primary.withAlpha(25),
-                            borderRadius: BorderRadius.circular(20),
-                            border: Border.all(
-                                color: AppTheme.primary.withAlpha(80)),
+                    .map(
+                      (c) => Container(
+                        margin: const EdgeInsets.only(right: 6),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 4,
+                        ),
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary.withAlpha(25),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(
+                            color: AppTheme.primary.withAlpha(80),
                           ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(Icons.label_outline_rounded,
-                                  size: 10, color: AppTheme.primary),
-                              const SizedBox(width: 4),
-                              Text(c,
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 11,
-                                      fontWeight: FontWeight.w600,
-                                      color: AppTheme.primary)),
-                            ],
-                          ),
-                        ))
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(
+                              Icons.label_outline_rounded,
+                              size: 10,
+                              color: AppTheme.primary,
+                            ),
+                            const SizedBox(width: 4),
+                            Text(
+                              c,
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    )
                     .toList(),
               ),
             ),
@@ -866,9 +921,10 @@ class _ActiveFiltersRow extends StatelessWidget {
               child: Text(
                 'Clear all',
                 style: GoogleFonts.outfit(
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
-                    color: const Color(0xFF888899)),
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: const Color(0xFF888899),
+                ),
               ),
             ),
           ),
@@ -907,25 +963,31 @@ class _SkeletonTile extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                    height: 14,
-                    width: double.infinity,
-                    decoration: BoxDecoration(
-                        color: AppTheme.surfaceVariantDark,
-                        borderRadius: BorderRadius.circular(6))),
+                  height: 14,
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceVariantDark,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
                 const SizedBox(height: 8),
                 Container(
-                    height: 11,
-                    width: 100,
-                    decoration: BoxDecoration(
-                        color: AppTheme.surfaceVariantDark,
-                        borderRadius: BorderRadius.circular(6))),
+                  height: 11,
+                  width: 100,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceVariantDark,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
                 const SizedBox(height: 6),
                 Container(
-                    height: 10,
-                    width: 60,
-                    decoration: BoxDecoration(
-                        color: AppTheme.surfaceVariantDark,
-                        borderRadius: BorderRadius.circular(6))),
+                  height: 10,
+                  width: 60,
+                  decoration: BoxDecoration(
+                    color: AppTheme.surfaceVariantDark,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                ),
               ],
             ),
           ),
@@ -941,8 +1003,11 @@ class _TypeOption {
   final String label;
   final String value;
   final IconData icon;
-  const _TypeOption(
-      {required this.label, required this.value, required this.icon});
+  const _TypeOption({
+    required this.label,
+    required this.value,
+    required this.icon,
+  });
 }
 
 class _SearchResultTile extends StatelessWidget {
@@ -970,7 +1035,7 @@ class _SearchResultTile extends StatelessWidget {
           border: Border.all(color: const Color(0xFF2A2A3E)),
           boxShadow: [
             BoxShadow(
-              color: Colors.black.withOpacity(0.2),
+              color: Colors.black.withValues(alpha: 0.2),
               blurRadius: 8,
               offset: const Offset(0, 2),
             ),
@@ -981,16 +1046,15 @@ class _SearchResultTile extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             borderRadius: BorderRadius.circular(16),
-            splashColor: AppTheme.primary.withOpacity(0.08),
-            highlightColor: AppTheme.primary.withOpacity(0.04),
+            splashColor: AppTheme.primary.withValues(alpha: 0.08),
+            highlightColor: AppTheme.primary.withValues(alpha: 0.04),
             child: Padding(
               padding: const EdgeInsets.all(12),
               child: Row(
                 children: [
                   // Poster / Avatar
                   ClipRRect(
-                    borderRadius:
-                        BorderRadius.circular(isPerson ? 30 : 10),
+                    borderRadius: BorderRadius.circular(isPerson ? 30 : 10),
                     child: imageUrl.isNotEmpty
                         ? Image.network(
                             imageUrl,
@@ -1024,45 +1088,55 @@ class _SearchResultTile extends StatelessWidget {
                             _TypeBadge(type: type),
                             if (year.isNotEmpty) ...[
                               const SizedBox(width: 8),
-                              Icon(Icons.calendar_today_outlined,
-                                  size: 11,
-                                  color: const Color(0xFF888899)),
+                              Icon(
+                                Icons.calendar_today_outlined,
+                                size: 11,
+                                color: const Color(0xFF888899),
+                              ),
                               const SizedBox(width: 3),
-                              Text(year,
-                                  style: GoogleFonts.outfit(
-                                      fontSize: 12,
-                                      color: const Color(0xFF888899))),
+                              Text(
+                                year,
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  color: const Color(0xFF888899),
+                                ),
+                              ),
                             ],
                           ],
                         ),
                         if (!isPerson && rating > 0) ...[
                           const SizedBox(height: 5),
-                          Row(children: [
-                            const Icon(Icons.star_rounded,
-                                color: Color(0xFFFFCC00), size: 13),
-                            const SizedBox(width: 3),
-                            Text(
-                              rating.toStringAsFixed(1),
-                              style: GoogleFonts.outfit(
-                                fontSize: 12,
-                                fontWeight: FontWeight.w700,
-                                color: const Color(0xFFFFCC00),
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.star_rounded,
+                                color: Color(0xFFFFCC00),
+                                size: 13,
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            if (overview.isNotEmpty)
-                              Expanded(
-                                child: Text(
-                                  overview,
-                                  style: GoogleFonts.outfit(
-                                    fontSize: 11,
-                                    color: const Color(0xFF888899),
-                                  ),
-                                  maxLines: 1,
-                                  overflow: TextOverflow.ellipsis,
+                              const SizedBox(width: 3),
+                              Text(
+                                rating.toStringAsFixed(1),
+                                style: GoogleFonts.outfit(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: const Color(0xFFFFCC00),
                                 ),
                               ),
-                          ]),
+                              const SizedBox(width: 8),
+                              if (overview.isNotEmpty)
+                                Expanded(
+                                  child: Text(
+                                    overview,
+                                    style: GoogleFonts.outfit(
+                                      fontSize: 11,
+                                      color: const Color(0xFF888899),
+                                    ),
+                                    maxLines: 1,
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
+                                ),
+                            ],
+                          ),
                         ],
                         if (isPerson &&
                             (item['department'] as String? ?? '')
@@ -1070,9 +1144,11 @@ class _SearchResultTile extends StatelessWidget {
                           const SizedBox(height: 5),
                           Row(
                             children: [
-                              Icon(Icons.work_outline_rounded,
-                                  size: 11,
-                                  color: const Color(0xFF888899)),
+                              Icon(
+                                Icons.work_outline_rounded,
+                                size: 11,
+                                color: const Color(0xFF888899),
+                              ),
                               const SizedBox(width: 4),
                               Text(
                                 item['department'] as String,
@@ -1095,8 +1171,11 @@ class _SearchResultTile extends StatelessWidget {
                       color: const Color(0xFF2A2A3E),
                       shape: BoxShape.circle,
                     ),
-                    child: const Icon(Icons.chevron_right_rounded,
-                        color: Color(0xFF888899), size: 18),
+                    child: const Icon(
+                      Icons.chevron_right_rounded,
+                      color: Color(0xFF888899),
+                      size: 18,
+                    ),
                   ),
                 ],
               ),
@@ -1114,18 +1193,18 @@ class _Placeholder extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Container(
-        width: isPerson ? 60 : 54,
-        height: isPerson ? 60 : 78,
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceVariantDark,
-          borderRadius: BorderRadius.circular(isPerson ? 30 : 10),
-        ),
-        child: Icon(
-          isPerson ? Icons.person_rounded : Icons.movie_rounded,
-          color: Colors.white24,
-          size: 26,
-        ),
-      );
+    width: isPerson ? 60 : 54,
+    height: isPerson ? 60 : 78,
+    decoration: BoxDecoration(
+      color: AppTheme.surfaceVariantDark,
+      borderRadius: BorderRadius.circular(isPerson ? 30 : 10),
+    ),
+    child: Icon(
+      isPerson ? Icons.person_rounded : Icons.movie_rounded,
+      color: Colors.white24,
+      size: 26,
+    ),
+  );
 }
 
 class _TypeBadge extends StatelessWidget {
@@ -1157,16 +1236,23 @@ class _TypeBadge extends StatelessWidget {
     }
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration:
-          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(8),
+      ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Icon(icon, size: 10, color: fg),
           const SizedBox(width: 4),
-          Text(label,
-              style: GoogleFonts.outfit(
-                  fontSize: 11, fontWeight: FontWeight.w600, color: fg)),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              fontWeight: FontWeight.w600,
+              color: fg,
+            ),
+          ),
         ],
       ),
     );

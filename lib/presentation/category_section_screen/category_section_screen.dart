@@ -22,7 +22,6 @@ class CategorySectionScreen extends StatefulWidget {
 class _CategorySectionScreenState extends State<CategorySectionScreen> {
   final String _tmdbBase = AppConfig.tmdbProxyUrl;
   static const String _imageBase = 'https://image.tmdb.org/t/p';
-  
 
   late final Dio _dio;
   final List<Map<String, dynamic>> _items = [];
@@ -55,8 +54,11 @@ class _CategorySectionScreenState extends State<CategorySectionScreen> {
   }
 
   Future<void> _fetchPage(int page) async {
-    if (page == 1) setState(() => _isLoading = true);
-    else setState(() => _isFetchingMore = true);
+    if (page == 1) {
+      setState(() => _isLoading = true);
+    } else {
+      setState(() => _isFetchingMore = true);
+    }
 
     try {
       final params = <String, dynamic>{
@@ -83,8 +85,16 @@ class _CategorySectionScreenState extends State<CategorySectionScreen> {
           'id': r['id'],
           'title': title,
           'type': 'movie',
-          'posterUrl': posterPath != null ? (posterPath.startsWith('http') ? posterPath : '$_imageBase/w342$posterPath') : '',
-          'backdropUrl': backdropPath != null ? (backdropPath.startsWith('http') ? backdropPath : '$_imageBase/w780$backdropPath') : '',
+          'posterUrl': posterPath != null
+              ? (posterPath.startsWith('http')
+                    ? posterPath
+                    : '$_imageBase/w342$posterPath')
+              : '',
+          'backdropUrl': backdropPath != null
+              ? (backdropPath.startsWith('http')
+                    ? backdropPath
+                    : '$_imageBase/w780$backdropPath')
+              : '',
           'posterSemanticLabel': 'Poster for $title',
           'backdropSemanticLabel': 'Backdrop for $title',
           'rating': (r['vote_average'] as num?)?.toDouble() ?? 0.0,
@@ -104,7 +114,11 @@ class _CategorySectionScreenState extends State<CategorySectionScreen> {
         });
       }
     } catch (_) {
-      if (mounted) setState(() { _isLoading = false; _isFetchingMore = false; });
+      if (mounted)
+        setState(() {
+          _isLoading = false;
+          _isFetchingMore = false;
+        });
     }
   }
 
@@ -125,21 +139,24 @@ class _CategorySectionScreenState extends State<CategorySectionScreen> {
               color: AppTheme.surfaceVariantDark,
               borderRadius: BorderRadius.circular(10),
             ),
-            child: const Icon(Icons.arrow_back_ios_new_rounded,
-                color: Colors.white, size: 16),
+            child: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              color: Colors.white,
+              size: 16,
+            ),
           ),
         ),
         title: Row(
           children: [
-            Text('${widget.emoji} ',
-                style: const TextStyle(fontSize: 20)),
+            Text('${widget.emoji} ', style: const TextStyle(fontSize: 20)),
             Expanded(
               child: Text(
                 widget.title,
                 style: GoogleFonts.outfit(
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700,
-                    color: Colors.white),
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                  color: Colors.white,
+                ),
                 overflow: TextOverflow.ellipsis,
               ),
             ),
@@ -208,9 +225,13 @@ class _MovieCard extends StatelessWidget {
                   ),
                   if (rating > 0)
                     Positioned(
-                      top: 8, right: 8,
+                      top: 8,
+                      right: 8,
                       child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 3),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 6,
+                          vertical: 3,
+                        ),
                         decoration: BoxDecoration(
                           color: Colors.black.withAlpha(180),
                           borderRadius: BorderRadius.circular(6),
@@ -218,13 +239,20 @@ class _MovieCard extends StatelessWidget {
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(Icons.star_rounded, color: AppTheme.accent, size: 12),
+                            Icon(
+                              Icons.star_rounded,
+                              color: AppTheme.accent,
+                              size: 12,
+                            ),
                             const SizedBox(width: 3),
-                            Text(rating.toStringAsFixed(1),
-                                style: GoogleFonts.outfit(
-                                    fontSize: 11,
-                                    fontWeight: FontWeight.w600,
-                                    color: Colors.white)),
+                            Text(
+                              rating.toStringAsFixed(1),
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                                color: Colors.white,
+                              ),
+                            ),
                           ],
                         ),
                       ),
@@ -237,18 +265,24 @@ class _MovieCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(item['title'] as String? ?? '',
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: GoogleFonts.outfit(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w600,
-                          color: const Color(0xFFE6E6F0))),
+                  Text(
+                    item['title'] as String? ?? '',
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: GoogleFonts.outfit(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w600,
+                      color: const Color(0xFFE6E6F0),
+                    ),
+                  ),
                   const SizedBox(height: 3),
-                  Text(item['year'] as String? ?? '',
-                      style: GoogleFonts.outfit(
-                          fontSize: 11,
-                          color: const Color(0xFF888899))),
+                  Text(
+                    item['year'] as String? ?? '',
+                    style: GoogleFonts.outfit(
+                      fontSize: 11,
+                      color: const Color(0xFF888899),
+                    ),
+                  ),
                 ],
               ),
             ),

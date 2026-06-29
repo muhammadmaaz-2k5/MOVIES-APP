@@ -1,4 +1,4 @@
-package com.example.cinemovie_app
+package com.job2day.nazaarabox
 
 import io.flutter.embedding.android.FlutterActivity
 

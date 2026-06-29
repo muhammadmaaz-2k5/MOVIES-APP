@@ -12,7 +12,12 @@ Future<void> shareItem(Map<String, dynamic> item, {BuildContext? context}) async
   final id      = item['id']       as int?    ?? 0;
   final typeStr = type == 'tv' ? 'tv' : 'movie';
   final url     = 'https://www.themoviedb.org/$typeStr/$id';
-  final text    = '🎬 $title\n\nWatch it on CineTrack!\n$url';
+  
+  final text = '🎬 I am watching "$title"!\n\n'
+      '🍿 Watch your favorite Movies, TV Shows & Anime for FREE on CineTrack.\n\n'
+      'ℹ️ Info: $url\n\n'
+      '🚀 Download the CineTrack App now and start streaming!\n'
+      '👉 https://play.google.com/store/apps/details?id=com.job2day.nazaarabox';
 
   Rect? sharePositionOrigin;
   if (context != null) {
@@ -215,10 +220,6 @@ void showPlayerMoreSheet(BuildContext context, Map<String, dynamic> item) {
                 borderRadius: BorderRadius.circular(2))),
         _MoreTile(icon: Icons.share_rounded, label: 'Share',
             onTap: () { Navigator.pop(sheetCtx); shareItem(item, context: context); }),
-        _MoreTile(icon: Icons.speed_rounded, label: 'Playback speed',
-            onTap: () { Navigator.pop(sheetCtx); showSpeedSheet(context); }),
-        _MoreTile(icon: Icons.loop_rounded, label: 'Loop video',
-            onTap: () { Navigator.pop(sheetCtx); }),
         const SizedBox(height: 8),
       ]),
     ),

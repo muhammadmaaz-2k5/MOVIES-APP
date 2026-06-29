@@ -54,9 +54,27 @@ const List<VideoServer> kVideoServers = [
     name: 'vidfast',
     label: 'VidFast',
     icon: '⚡',
-    movieUrlTemplate: 'https://vidfast.pro/movie/{id}?autoPlay=true&theme=6C5CE7',
-    tvUrlTemplate: 'https://vidfast.pro/tv/{id}/{season}/{episode}?autoPlay=true&theme=6C5CE7&nextButton=true&autoNext=true'
-  )
+    movieUrlTemplate:
+        'https://vidfast.pro/movie/{id}?autoPlay=true&theme=6C5CE7',
+    tvUrlTemplate:
+        'https://vidfast.pro/tv/{id}/{season}/{episode}?autoPlay=true&theme=6C5CE7&nextButton=true&autoNext=true',
+  ),
+  VideoServer(
+    name: 'vidsrc',
+    label: 'VidSrc',
+    icon: '▶',
+    movieUrlTemplate: 'https://vidsrc.to/embed/movie/{id}',
+    tvUrlTemplate: 'https://vidsrc.to/embed/tv/{id}/{season}/{episode}',
+  ),
+  VideoServer(
+    name: 'vidlink',
+    label: 'VidLink',
+    icon: '⚡',
+    movieUrlTemplate:
+        'https://vidlink.pro/movie/{id}?primaryColor=B20710&secondaryColor=170000&icons=vid&iconColor=B20710&title=false&poster=true&autoplay=false&nextbutton=true',
+    tvUrlTemplate:
+        'https://vidlink.pro/tv/{id}/{season}/{episode}?primaryColor=B20710&secondaryColor=170000&icons=vid&iconColor=B20710&title=false&poster=true&autoplay=false&nextbutton=true',
+  ),
 ];
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -76,26 +94,25 @@ class MoviePlayerScreen extends StatefulWidget {
 class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
   late WebViewController _controller;
   List<VideoServer> _servers = [];
-  bool   _isLoadingServers = true;
-  int    _serverIndex  = 0;
-  bool   _isLoading    = true;
-  bool   _hasError     = false;
-  bool   _nudgeShown   = false;  // rotate-to-fullscreen nudge
+  bool _isLoadingServers = true;
+  int _serverIndex = 0;
+  bool _isLoading = true;
+  bool _hasError = false;
+  bool _nudgeShown = false; // rotate-to-fullscreen nudge
 
   Timer? _timeoutTimer;
   bool _errorTriggered = false;
   int _savedPosition = 0;
 
   // For TV episodes passed via item map
-  int? get _season  => widget.item['season']  as int?;
+  int? get _season => widget.item['season'] as int?;
   int? get _episode => widget.item['episode'] as int?;
 
-  String get _currentUrl =>
-      _servers[_serverIndex].buildUrl(
-        widget.item,
-        season:  _season,
-        episode: _episode,
-      );
+  String get _currentUrl => _servers[_serverIndex].buildUrl(
+    widget.item,
+    season: _season,
+    episode: _episode,
+  );
 
   @override
   void initState() {
@@ -123,11 +140,14 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
       final dio = Dio();
       final id = widget.item['id'] ?? 0;
       final type = widget.item['type'] ?? 'movie';
-      final url = '${AppConfig.backendBaseUrl}/api/config/servers?id=$id&type=$type&season=${_season ?? ''}&episode=${_episode ?? ''}';
-      
+      final url =
+          '${AppConfig.backendBaseUrl}/api/config/servers?id=$id&type=$type&season=${_season ?? ''}&episode=${_episode ?? ''}';
+
       final response = await dio.get(url);
       final rawList = response.data as List? ?? [];
-      final parsed = rawList.map((s) => VideoServer.fromJson(s as Map<String, dynamic>)).toList();
+      final parsed = rawList
+          .map((s) => VideoServer.fromJson(s as Map<String, dynamic>))
+          .toList();
       if (mounted) {
         setState(() {
           _servers = parsed;
@@ -142,12 +162,31 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
         setState(() {
           _servers = const [
             VideoServer(
+              name: 'vidsrc',
+              label: 'VidSrc',
+              icon: '▶',
+              movieUrlTemplate: 'https://vidsrc.to/embed/movie/{id}',
+              tvUrlTemplate:
+                  'https://vidsrc.to/embed/tv/{id}/{season}/{episode}',
+            ),
+            VideoServer(
+              name: 'vidlink',
+              label: 'VidLink',
+              icon: '⚡',
+              movieUrlTemplate:
+                  'https://vidlink.pro/movie/{id}?primaryColor=B20710&secondaryColor=170000&icons=vid&iconColor=B20710&title=false&poster=true&autoplay=false&nextbutton=true',
+              tvUrlTemplate:
+                  'https://vidlink.pro/tv/{id}/{season}/{episode}?primaryColor=B20710&secondaryColor=170000&icons=vid&iconColor=B20710&title=false&poster=true&autoplay=false&nextbutton=true',
+            ),
+            VideoServer(
               name: 'vidfast',
               label: 'VidFast',
               icon: '⚡',
-              movieUrlTemplate: 'https://vidfast.pro/movie/{id}?autoPlay=true&theme=6C5CE7',
-              tvUrlTemplate: 'https://vidfast.pro/tv/{id}/{season}/{episode}?autoPlay=true&theme=6C5CE7&nextButton=true&autoNext=true'
-            )
+              movieUrlTemplate:
+                  'https://vidfast.pro/movie/{id}?autoPlay=true&theme=6C5CE7',
+              tvUrlTemplate:
+                  'https://vidfast.pro/tv/{id}/{season}/{episode}?autoPlay=true&theme=6C5CE7&nextButton=true&autoNext=true',
+            ),
           ];
           _isLoadingServers = false;
         });
@@ -180,45 +219,45 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
 
   bool _detectVidsrc(String url) {
     final lowerUrl = url.toLowerCase();
-    return lowerUrl.contains('vidsrc.icu') || 
-           lowerUrl.contains('vidsrc.to') || 
-           lowerUrl.contains('vidsrc.me') ||
-           lowerUrl.contains('vidsrc.net') ||
-           lowerUrl.contains('vidsrc.xyz') ||
-           lowerUrl.contains('vidsrc.cc') ||
-           lowerUrl.contains('vidfast.pro') ||
-           lowerUrl.contains('vidlink.pro') ||
-           lowerUrl.contains('vidsrc');
+    return lowerUrl.contains('vidsrc.icu') ||
+        lowerUrl.contains('vidsrc.to') ||
+        lowerUrl.contains('vidsrc.me') ||
+        lowerUrl.contains('vidsrc.net') ||
+        lowerUrl.contains('vidsrc.xyz') ||
+        lowerUrl.contains('vidsrc.cc') ||
+        lowerUrl.contains('vidfast.pro') ||
+        lowerUrl.contains('vidlink.pro') ||
+        lowerUrl.contains('vidsrc');
   }
 
   bool _detectDoodstream(String url) {
     final lowerUrl = url.toLowerCase();
-    return lowerUrl.contains('doodstream.com') || 
-           lowerUrl.contains('dsvplay.com') || 
-           lowerUrl.contains('dood.to') ||
-           lowerUrl.contains('ds2play.com') ||
-           lowerUrl.contains('ds2video.com');
+    return lowerUrl.contains('doodstream.com') ||
+        lowerUrl.contains('dsvplay.com') ||
+        lowerUrl.contains('dood.to') ||
+        lowerUrl.contains('ds2play.com') ||
+        lowerUrl.contains('ds2video.com');
   }
 
   String? _getVideoHostingService(String url) {
     final lowerUrl = url.toLowerCase();
-    
-    if (lowerUrl.contains('1drv.ms') || 
-        lowerUrl.contains('onedrive.live.com') || 
+
+    if (lowerUrl.contains('1drv.ms') ||
+        lowerUrl.contains('onedrive.live.com') ||
         lowerUrl.contains('sharepoint.com')) {
       return 'onedrive';
     }
-    
-    if (lowerUrl.contains('doodstream.com') || 
-        lowerUrl.contains('dsvplay.com') || 
+
+    if (lowerUrl.contains('doodstream.com') ||
+        lowerUrl.contains('dsvplay.com') ||
         lowerUrl.contains('dood.to') ||
         lowerUrl.contains('ds2play.com') ||
         lowerUrl.contains('ds2video.com')) {
       return 'doodstream';
     }
-    
-    if (lowerUrl.contains('vidsrc.icu') || 
-        lowerUrl.contains('vidsrc.to') || 
+
+    if (lowerUrl.contains('vidsrc.icu') ||
+        lowerUrl.contains('vidsrc.to') ||
         lowerUrl.contains('vidsrc.me') ||
         lowerUrl.contains('vidsrc.net') ||
         lowerUrl.contains('vidsrc.xyz') ||
@@ -228,39 +267,40 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
         lowerUrl.contains('vidsrc')) {
       return 'vidsrc';
     }
-    
-    if (lowerUrl.contains('vidzee.wtf') || 
+
+    if (lowerUrl.contains('vidzee.wtf') ||
         lowerUrl.contains('player.vidzee.wtf')) {
       return 'vidzee';
     }
-    
-    if (lowerUrl.contains('videasy.net') || 
+
+    if (lowerUrl.contains('videasy.net') ||
         lowerUrl.contains('player.videasy.net')) {
       return 'videasy';
     }
-    
+
     if (lowerUrl.contains('vidnest.fun')) {
       return 'vidnest';
     }
-    
-    if (lowerUrl.contains('mixdrop.co') || 
+
+    if (lowerUrl.contains('mixdrop.co') ||
         lowerUrl.contains('mixdrop.to') ||
         lowerUrl.contains('mixdrop.sx') ||
         lowerUrl.contains('mixdrop.bz')) {
       return 'mixdrop';
     }
-    
-    if (lowerUrl.contains('streamtape.com') || 
+
+    if (lowerUrl.contains('streamtape.com') ||
         lowerUrl.contains('streamtape.net') ||
         lowerUrl.contains('streamtape.to')) {
       return 'streamtape';
     }
-    
+
     if (lowerUrl.contains('tiktok.com')) return 'tiktok';
     if (lowerUrl.contains('embedsito.com')) return 'embedsito';
     if (lowerUrl.contains('embed.su')) return 'embedsu';
     if (lowerUrl.contains('upstream.to')) return 'upstream';
-    if (lowerUrl.contains('youtube.com') || lowerUrl.contains('youtu.be')) return 'youtube';
+    if (lowerUrl.contains('youtube.com') || lowerUrl.contains('youtu.be'))
+      return 'youtube';
     if (lowerUrl.contains('vimeo.com')) return 'vimeo';
     if (lowerUrl.contains('dailymotion.com')) return 'dailymotion';
     if (lowerUrl.contains('streamable.com')) return 'streamable';
@@ -270,9 +310,10 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
     if (lowerUrl.contains('mp4upload.com')) return 'mp4upload';
     if (lowerUrl.contains('streamlare.com')) return 'streamlare';
     if (lowerUrl.contains('filemoon.sx')) return 'filemoon';
-    if (lowerUrl.contains('bilibili.tv') || lowerUrl.contains('bilibili.com')) return 'bilibili';
-    
-    if (lowerUrl.contains('cloudflare.com') || 
+    if (lowerUrl.contains('bilibili.tv') || lowerUrl.contains('bilibili.com'))
+      return 'bilibili';
+
+    if (lowerUrl.contains('cloudflare.com') ||
         lowerUrl.contains('cloudfront.net') ||
         lowerUrl.contains('googleapis.com') ||
         lowerUrl.contains('gstatic.com') ||
@@ -280,7 +321,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
         lowerUrl.contains('jwplatform.com')) {
       return 'cdn';
     }
-    
+
     return null;
   }
 
@@ -292,9 +333,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
     if (url == currentUrl) {
       return false;
     }
-    
+
     final lowerUrl = url.toLowerCase();
-    
+
     if (isVidsrc) {
       const strictBlockedPatterns = [
         'doubleclick.net',
@@ -311,18 +352,20 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
         'snapchat.com',
         'play.google.com',
         'apps.apple.com',
-        'itunes.apple.com'
+        'itunes.apple.com',
       ];
-      final shouldBlock = strictBlockedPatterns.any((pattern) => lowerUrl.contains(pattern));
+      final shouldBlock = strictBlockedPatterns.any(
+        (pattern) => lowerUrl.contains(pattern),
+      );
       if (!shouldBlock) {
         return false;
       }
     }
-    
+
     if (_isAllowedVideoHosting(url)) {
       return false;
     }
-    
+
     const blockedPatterns = [
       'doubleclick.net',
       'googlesyndication.com',
@@ -349,40 +392,55 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
       'snapchat.com',
       'play.google.com',
       'apps.apple.com',
-      'itunes.apple.com'
+      'itunes.apple.com',
     ];
-    
+
     for (final pattern in blockedPatterns) {
       if (lowerUrl.contains(pattern)) {
         return true;
       }
     }
-    
+
     if (lowerUrl.contains('/app/') || lowerUrl.contains('/apps/')) {
       return true;
     }
-    
+
     return false;
   }
 
-  String _buildHtmlContent(String processedUrl, bool isDoodstream, int savedPosition, bool isVidsrc) {
+  String _buildHtmlContent(
+    String processedUrl,
+    bool isDoodstream,
+    int savedPosition,
+    bool isVidsrc,
+  ) {
     final buffer = StringBuffer();
     buffer.write('<!DOCTYPE html>');
     buffer.write('<html><head>');
-    buffer.write('<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">');
+    buffer.write(
+      '<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">',
+    );
     buffer.write('<style>');
-    buffer.write('html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; display: flex; align-items: center; justify-content: center; }');
-    
+    buffer.write(
+      'html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background-color: #000; display: flex; align-items: center; justify-content: center; }',
+    );
+
     if (processedUrl.contains('youtube.com')) {
-      buffer.write('iframe { width: 100%; height: 100%; border: none; display: block; }');
+      buffer.write(
+        'iframe { width: 100%; height: 100%; border: none; display: block; }',
+      );
       buffer.write('.ytp-pause-overlay { display: none !important; }');
     } else if (isDoodstream) {
-      buffer.write('iframe { width: 100%; height: 100%; border: none; display: block; margin: 0 auto; }');
+      buffer.write(
+        'iframe { width: 100%; height: 100%; border: none; display: block; margin: 0 auto; }',
+      );
     } else {
-      buffer.write('iframe { width: 100%; height: 100%; border: none; display: block; }');
+      buffer.write(
+        'iframe { width: 100%; height: 100%; border: none; display: block; }',
+      );
     }
     buffer.write('</style>');
-    
+
     if (isDoodstream && savedPosition > 0) {
       buffer.write('<script>');
       buffer.write('''
@@ -454,26 +512,32 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
       ''');
       buffer.write('</script>');
     }
-    
+
     final bodyStyle = isDoodstream
         ? "margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; display: flex; align-items: center; justify-content: center;"
         : "margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden;";
-        
+
     buffer.write('</head><body style="$bodyStyle">');
-    
+
     final iframeBaseStyle = isDoodstream
         ? "width: 100%; height: 100%; border: none; display: block; margin: 0 auto;"
         : "width: 100%; height: 100%; border: none; display: block;";
-        
-    buffer.write('<iframe id="video-iframe" src="$processedUrl" allowfullscreen');
+
+    buffer.write(
+      '<iframe id="video-iframe" src="$processedUrl" allowfullscreen',
+    );
     if (isVidsrc) {
-      buffer.write(' allow="autoplay; fullscreen; picture-in-picture; encrypted-media"');
+      buffer.write(
+        ' allow="autoplay; fullscreen; picture-in-picture; encrypted-media"',
+      );
     }
     if (processedUrl.contains('youtube.com')) {
-      buffer.write(' allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"');
+      buffer.write(
+        ' allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"',
+      );
     }
     buffer.write(' style="$iframeBaseStyle"></iframe>');
-    
+
     if (isDoodstream) {
       buffer.write('<script>');
       buffer.write('''
@@ -538,7 +602,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
       ''');
       buffer.write('</script>');
     }
-    
+
     buffer.write('</body></html>');
     return buffer.toString();
   }
@@ -567,9 +631,9 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
   void _startTimeoutTimer() {
     _timeoutTimer?.cancel();
     _errorTriggered = false;
-    
+
     final isVidsrc = _detectVidsrc(_currentUrl);
-    
+
     _timeoutTimer = Timer(const Duration(seconds: 20), () {
       if (mounted && _isLoading && !_errorTriggered) {
         setState(() {
@@ -593,16 +657,18 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
   void _autoSwitchServer() {
     if (_servers.length <= 1) return;
     final nextIdx = (_serverIndex + 1) % _servers.length;
-    
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Server \${_servers[_serverIndex].label} failed. Switching to \${_servers[nextIdx].label}...',
-            style: GoogleFonts.outfit()),
+        content: Text(
+          'Server \${_servers[_serverIndex].label} failed. Switching to \${_servers[nextIdx].label}...',
+          style: GoogleFonts.outfit(),
+        ),
         backgroundColor: AppTheme.surfaceDark,
         duration: const Duration(seconds: 2),
       ),
     );
-    
+
     _switchServer(nextIdx);
   }
 
@@ -619,7 +685,7 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
       });
       return;
     }
-    
+
     Future.delayed(const Duration(seconds: 3), () async {
       if (!mounted) return;
       try {
@@ -655,12 +721,13 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
                 }
             })();
         ''');
-        
+
         final resultStr = result.toString().replaceAll('"', '').trim();
-        final hasVideo = resultStr.contains('hasVideo:true') || 
-                         resultStr.contains('reason:cors_blocked') || 
-                         resultStr.contains('reason:check_failed');
-                         
+        final hasVideo =
+            resultStr.contains('hasVideo:true') ||
+            resultStr.contains('reason:cors_blocked') ||
+            resultStr.contains('reason:check_failed');
+
         if (mounted) {
           setState(() {
             _isLoading = false;
@@ -691,24 +758,30 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
   Future<void> _loadCurrentContent() async {
     _timeoutTimer?.cancel();
     _startTimeoutTimer();
-    
+
     await _loadSavedPosition();
-    
-    final isYoutube = _currentUrl.contains('youtube.com') || _currentUrl.contains('youtu.be');
+
+    final isYoutube =
+        _currentUrl.contains('youtube.com') || _currentUrl.contains('youtu.be');
     final isDoodstream = _detectDoodstream(_currentUrl);
     final isVidsrc = _detectVidsrc(_currentUrl);
-    
+
     if (isYoutube) {
       _controller.loadRequest(Uri.parse(_currentUrl));
     } else {
-      final html = _buildHtmlContent(_currentUrl, isDoodstream, _savedPosition, isVidsrc);
+      final html = _buildHtmlContent(
+        _currentUrl,
+        isDoodstream,
+        _savedPosition,
+        isVidsrc,
+      );
       _controller.loadHtmlString(html, baseUrl: _currentUrl);
     }
   }
 
   void _initController() {
     final isVidsrc = _detectVidsrc(_currentUrl);
-    
+
     _controller = WebViewController()
       ..setJavaScriptMode(JavaScriptMode.unrestricted)
       ..setBackgroundColor(Colors.black)
@@ -727,25 +800,27 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
           } catch (_) {}
         },
       )
-      ..setNavigationDelegate(NavigationDelegate(
-        onPageStarted: (_) {
-          if (mounted) {
-            setState(() {
-              _isLoading = true;
-              _hasError = false;
-            });
-          }
-        },
-        onPageFinished: (url) {
-          _checkVideoAvailability();
-          
-          final isDoodstream = _detectDoodstream(_currentUrl);
-          if (isDoodstream && _savedPosition > 0) {
-            final isNewLoad = url == _currentUrl;
-            if (isNewLoad) {
-              Future.delayed(const Duration(seconds: 2), () {
-                if (!mounted) return;
-                final restoreScript = '''
+      ..setNavigationDelegate(
+        NavigationDelegate(
+          onPageStarted: (_) {
+            if (mounted) {
+              setState(() {
+                _isLoading = true;
+                _hasError = false;
+              });
+            }
+          },
+          onPageFinished: (url) {
+            _checkVideoAvailability();
+
+            final isDoodstream = _detectDoodstream(_currentUrl);
+            if (isDoodstream && _savedPosition > 0) {
+              final isNewLoad = url == _currentUrl;
+              if (isNewLoad) {
+                Future.delayed(const Duration(seconds: 2), () {
+                  if (!mounted) return;
+                  final restoreScript =
+                      '''
                     (function() {
                         var savedPosition = $_savedPosition;
                         var attempts = 0;
@@ -796,90 +871,99 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
                         setTimeout(tryRestore, 2000);
                     })();
                 ''';
-                _controller.runJavaScript(restoreScript);
-              });
+                  _controller.runJavaScript(restoreScript);
+                });
+              }
             }
-          }
-        },
-        onWebResourceError: (error) {
-          debugPrint("WebView Error (\${error.errorCode}): \${error.description} for URL: \${error.failingUrl}");
-          
-          if (isVidsrc) {
-            if (mounted) {
-              setState(() {
-                _isLoading = false;
-                _hasError = false;
-              });
+          },
+          onWebResourceError: (error) {
+            debugPrint(
+              "WebView Error (\${error.errorCode}): \${error.description} for URL: \${error.failingUrl}",
+            );
+
+            if (isVidsrc) {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                  _hasError = false;
+                });
+              }
+              return;
             }
-            return;
-          }
-          
-          if (!_errorTriggered) {
-            if (mounted) {
-              setState(() {
-                _isLoading = false;
-                _hasError = true;
-                _errorTriggered = true;
-              });
+
+            if (!_errorTriggered) {
+              if (mounted) {
+                setState(() {
+                  _isLoading = false;
+                  _hasError = true;
+                  _errorTriggered = true;
+                });
+              }
+              _autoSwitchServer();
             }
-            _autoSwitchServer();
-          }
-        },
-        onNavigationRequest: (NavigationRequest request) {
-          final url = request.url;
-          final isMain = request.isMainFrame;
-          
-          if (isMain) {
-            if (url != _currentUrl) {
-              debugPrint("🚫 Blocked main frame navigation (frame busting): \$url");
+          },
+          onNavigationRequest: (NavigationRequest request) {
+            final url = request.url;
+            final isMain = request.isMainFrame;
+
+            if (isMain) {
+              if (url != _currentUrl) {
+                debugPrint(
+                  "🚫 Blocked main frame navigation (frame busting): \$url",
+                );
+                return NavigationDecision.prevent;
+              }
+            }
+
+            if (_shouldBlockNavigation(url, _currentUrl, isVidsrc)) {
+              debugPrint("🚫 Blocked navigation: \$url");
               return NavigationDecision.prevent;
             }
-          }
-          
-          if (_shouldBlockNavigation(url, _currentUrl, isVidsrc)) {
-            debugPrint("🚫 Blocked navigation: \$url");
-            return NavigationDecision.prevent;
-          }
-          
-          if (isVidsrc) {
-            return NavigationDecision.navigate;
-          }
-          
-          final isDoodstream = _detectDoodstream(_currentUrl);
-          if (isDoodstream) {
-            bool sameDomain = false;
-            try {
-              final processedDomain = Uri.parse(_currentUrl).host;
-              final requestDomain = Uri.parse(url).host;
-              sameDomain = requestDomain == processedDomain || 
-                           requestDomain.endsWith('.\$processedDomain') ||
-                           processedDomain.endsWith('.\$requestDomain');
-            } catch (_) {}
-            
-            if (sameDomain) {
+
+            if (isVidsrc) {
               return NavigationDecision.navigate;
             }
-          }
-          
-          return NavigationDecision.navigate;
-        },
-      ));
-      
-      _loadCurrentContent();
+
+            final isDoodstream = _detectDoodstream(_currentUrl);
+            if (isDoodstream) {
+              bool sameDomain = false;
+              try {
+                final processedDomain = Uri.parse(_currentUrl).host;
+                final requestDomain = Uri.parse(url).host;
+                sameDomain =
+                    requestDomain == processedDomain ||
+                    requestDomain.endsWith('.\$processedDomain') ||
+                    processedDomain.endsWith('.\$requestDomain');
+              } catch (_) {}
+
+              if (sameDomain) {
+                return NavigationDecision.navigate;
+              }
+            }
+
+            return NavigationDecision.navigate;
+          },
+        ),
+      );
+
+    _loadCurrentContent();
   }
 
   void _switchServer(int idx) {
     if (idx == _serverIndex) return;
     setState(() {
       _serverIndex = idx;
-      _isLoading   = true;
-      _hasError    = false;
+      _isLoading = true;
+      _hasError = false;
     });
     _loadCurrentContent();
   }
 
   void _reload() {
-    setState(() { _isLoading = true; _hasError = false; });
+    setState(() {
+      _isLoading = true;
+      _hasError = false;
+    });
     _loadCurrentContent();
   }
 
@@ -888,266 +972,312 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
     if (_isLoadingServers) {
       return const Scaffold(
         backgroundColor: Colors.black,
-        body: Center(
-          child: CircularProgressIndicator(color: AppTheme.primary),
-        ),
+        body: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
       );
     }
 
-    return OrientationBuilder(builder: (context, orientation) {
-      final isLandscape = orientation == Orientation.landscape;
-      final server      = _servers[_serverIndex];
+    return OrientationBuilder(
+      builder: (context, orientation) {
+        final isLandscape = orientation == Orientation.landscape;
+        final server = _servers[_serverIndex];
 
-      // ── LANDSCAPE: fullscreen immersive player ──────────────────
-      if (isLandscape) {
-        // Hide system UI for true immersive
-        SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-        return Scaffold(
-          backgroundColor: Colors.black,
-          body: Stack(fit: StackFit.expand, children: [
-            WebViewWidget(controller: _controller),
-            if (_isLoading)
-              _LoadingOverlay(serverLabel: server.label),
-            if (_hasError && !_isLoading)
-              _ErrorOverlay(
-                onRetry:      _reload,
-                onNextServer: () => _switchServer((_serverIndex + 1) % _servers.length),
-              ),
-            // Exit-fullscreen pill (bottom-right, auto-fades)
-            Positioned(
-              bottom: 16, right: 16,
-              child: GestureDetector(
-                onTap: _exitLandscape,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(160),
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: Colors.white.withAlpha(40)),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    const Icon(Icons.fullscreen_exit_rounded,
-                        color: Colors.white, size: 16),
-                    const SizedBox(width: 6),
-                    Text('Exit fullscreen',
-                        style: GoogleFonts.outfit(
-                            fontSize: 12, color: Colors.white70)),
-                  ]),
-                ),
-              ),
-            ),
-            // Server badge top-left
-            Positioned(
-              top: 16, left: 16,
-              child: SafeArea(child: GestureDetector(
-                onTap: () => _showServerSheet(context),
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                  decoration: BoxDecoration(
-                    color: Colors.black.withAlpha(140),
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: AppTheme.primary.withAlpha(80)),
-                  ),
-                  child: Row(mainAxisSize: MainAxisSize.min, children: [
-                    Text(server.icon, style: const TextStyle(fontSize: 13)),
-                    const SizedBox(width: 5),
-                    Text(server.label, style: GoogleFonts.outfit(
-                        fontSize: 11, fontWeight: FontWeight.w700,
-                        color: AppTheme.primary)),
-                    const SizedBox(width: 4),
-                    const Icon(Icons.expand_more_rounded,
-                        color: AppTheme.primary, size: 12),
-                  ]),
-                ),
-              )),
-            ),
-          ]),
-        );
-      }
-
-      // ── PORTRAIT: player + info panel ─────────────────────────
-      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
-      final title   = widget.item['title']   as String? ?? '';
-      final type    = widget.item['type']    as String? ?? 'movie';
-      final year    = widget.item['year']    as String? ?? '';
-      final runtime = widget.item['runtime'] as String? ?? '';
-      final isTv    = type == 'tv';
-
-      return Scaffold(
-        backgroundColor: Colors.black,
-        appBar: _buildAppBar(title, isTv, year, runtime, server),
-        body: Stack(children: [
-          Column(children: [
-            // ── Video WebView ──────────────────────────────────
-            AspectRatio(
-              aspectRatio: 16 / 9,
-              child: Stack(fit: StackFit.expand, children: [
+        // ── LANDSCAPE: fullscreen immersive player ──────────────────
+        if (isLandscape) {
+          // Hide system UI for true immersive
+          SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
+          return Scaffold(
+            backgroundColor: Colors.black,
+            body: Stack(
+              fit: StackFit.expand,
+              children: [
                 WebViewWidget(controller: _controller),
-                if (_isLoading)
-                  _LoadingOverlay(serverLabel: server.label),
+                if (_isLoading) _LoadingOverlay(serverLabel: server.label),
                 if (_hasError && !_isLoading)
                   _ErrorOverlay(
-                    onRetry:      _reload,
-                    onNextServer: () => _switchServer((_serverIndex + 1) % _servers.length),
+                    onRetry: _reload,
+                    onNextServer: () =>
+                        _switchServer((_serverIndex + 1) % _servers.length),
                   ),
-                // Fullscreen button
-                Positioned(bottom: 8, right: 8,
-                  child: GestureDetector(
-                    onTap: _enterLandscape,
-                    child: Container(
-                      width: 34, height: 34,
-                      decoration: BoxDecoration(
-                        color: Colors.black.withAlpha(140),
-                        borderRadius: BorderRadius.circular(8)),
-                      child: const Icon(Icons.fullscreen_rounded,
-                          color: Colors.white, size: 20)))),
-              ]),
-            ),
-
-            // ── Info + server panel ────────────────────────────
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    // Title + meta
-                    Text(title, style: GoogleFonts.outfit(
-                        fontSize: 17, fontWeight: FontWeight.w800,
-                        color: Colors.white),
-                        maxLines: 2, overflow: TextOverflow.ellipsis),
-                    const SizedBox(height: 4),
-                    Row(children: [
-                      if (isTv && _season != null) ...[
-                        _MetaBadge(label: 'S$_season E$_episode',
-                            color: AppTheme.secondary),
-                        const SizedBox(width: 8),
-                      ],
-                      if (year.isNotEmpty) _MetaBadge(label: year),
-                      if (runtime.isNotEmpty) ...[
-                        const SizedBox(width: 8),
-                        _MetaBadge(label: runtime),
-                      ],
-                    ]),
-                    const SizedBox(height: 18),
-
-                    // Server selector
-                    Row(children: [
-                      const Icon(Icons.dns_rounded, color: AppTheme.primary, size: 16),
-                      const SizedBox(width: 6),
-                      Text('Select Server', style: GoogleFonts.outfit(
-                          fontSize: 14, fontWeight: FontWeight.w700,
-                          color: Colors.white)),
-                    ]),
-                    const SizedBox(height: 10),
-                    Wrap(
-                      spacing: 10, runSpacing: 10,
-                      children: List.generate(_servers.length, (i) {
-                        final s        = _servers[i];
-                        final isActive = i == _serverIndex;
-                        return GestureDetector(
-                          onTap: () => _switchServer(i),
-                          child: AnimatedContainer(
-                            duration: const Duration(milliseconds: 200),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 14, vertical: 10),
-                            decoration: BoxDecoration(
-                              color: isActive
-                                  ? AppTheme.primary.withAlpha(30)
-                                  : AppTheme.surfaceDark,
-                              borderRadius: BorderRadius.circular(12),
-                              border: Border.all(
-                                color: isActive
-                                    ? AppTheme.primary
-                                    : const Color(0xFF2A2A3E),
-                                width: isActive ? 1.5 : 1,
+                // Exit-fullscreen pill (center bottom, auto-fades)
+                Positioned(
+                  bottom: 16,
+                  left: 0,
+                  right: 0,
+                  child: Center(
+                    child: GestureDetector(
+                      onTap: _exitLandscape,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 7,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withAlpha(160),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: Colors.white.withAlpha(40)),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(
+                              Icons.fullscreen_exit_rounded,
+                              color: Colors.white,
+                              size: 16,
+                            ),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Exit fullscreen',
+                              style: GoogleFonts.outfit(
+                                fontSize: 12,
+                                color: Colors.white70,
                               ),
                             ),
-                            child: Row(mainAxisSize: MainAxisSize.min, children: [
-                              Text(s.icon, style: const TextStyle(fontSize: 16)),
-                              const SizedBox(width: 8),
-                              Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(s.label, style: GoogleFonts.outfit(
-                                      fontSize: 13,
-                                      fontWeight: isActive
-                                          ? FontWeight.w700 : FontWeight.w500,
-                                      color: isActive
-                                          ? AppTheme.primary : Colors.white)),
-                                  if (isActive)
-                                    Text('Active', style: GoogleFonts.outfit(
-                                        fontSize: 10,
-                                        color: AppTheme.primary.withAlpha(180))),
-                                ],
-                              ),
-                              if (isActive) ...[
-                                const SizedBox(width: 8),
-                                Container(
-                                  width: 8, height: 8,
-                                  decoration: BoxDecoration(
-                                    color: AppTheme.primary,
-                                    shape: BoxShape.circle,
-                                    boxShadow: [BoxShadow(
-                                        color: AppTheme.primary.withAlpha(150),
-                                        blurRadius: 6)],
-                                  ),
-                                ),
-                              ],
-                            ]),
-                          ),
-                        );
-                      }),
-                    ),
-
-                    const SizedBox(height: 20),
-                    const Divider(color: Color(0xFF2A2A3E)),
-                    const SizedBox(height: 12),
-
-                    // Action row
-                    Row(children: [
-                      Expanded(child: _ActionTile(
-                        icon: Icons.open_in_browser_rounded,
-                        label: 'Open in browser',
-                        onTap: () => openInBrowser(_currentUrl),
-                      )),
-                      const SizedBox(width: 10),
-                      Expanded(child: _ActionTile(
-                        icon: Icons.share_rounded,
-                        label: 'Share',
-                        onTap: () => shareItem(widget.item),
-                      )),
-                    ]),
-
-                    const SizedBox(height: 10),
-                    GestureDetector(
-                      onTap: () => ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(
-                          content: Text('Report submitted. Thank you!',
-                              style: GoogleFonts.outfit()),
-                          backgroundColor: AppTheme.surfaceDark,
+                          ],
                         ),
                       ),
-                      child: Row(children: [
-                        const Icon(Icons.report_outlined,
-                            color: Color(0xFF666688), size: 14),
-                        const SizedBox(width: 6),
-                        Text('Report broken stream', style: GoogleFonts.outfit(
-                            fontSize: 12, color: const Color(0xFF666688))),
-                      ]),
                     ),
-                  ],
+                  ),
                 ),
-              ),
+                // Server badge top-left
+                Positioned(
+                  top: 16,
+                  left: 16,
+                  child: SafeArea(
+                    child: GestureDetector(
+                      onTap: () => _showServerSheet(context),
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 10,
+                          vertical: 6,
+                        ),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withAlpha(140),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppTheme.primary.withAlpha(80),
+                          ),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Text(
+                              server.icon,
+                              style: const TextStyle(fontSize: 13),
+                            ),
+                            const SizedBox(width: 5),
+                            Text(
+                              server.label,
+                              style: GoogleFonts.outfit(
+                                fontSize: 11,
+                                fontWeight: FontWeight.w700,
+                                color: AppTheme.primary,
+                              ),
+                            ),
+                            const SizedBox(width: 4),
+                            const Icon(
+                              Icons.expand_more_rounded,
+                              color: AppTheme.primary,
+                              size: 12,
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
-          ]),
+          );
+        }
 
-          // ── Rotate-to-fullscreen nudge ─────────────────────
-          if (_nudgeShown)
-            _RotateNudge(onTap: _enterLandscape),
-        ]),
-      );
-    });
+        // ── PORTRAIT: player + info panel ─────────────────────────
+        SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+        final title = widget.item['title'] as String? ?? '';
+        final type = widget.item['type'] as String? ?? 'movie';
+        final year = widget.item['year'] as String? ?? '';
+        final runtime = widget.item['runtime'] as String? ?? '';
+        final isTv = type == 'tv';
+
+        return Scaffold(
+          backgroundColor: Colors.black,
+          appBar: _buildAppBar(title, isTv, year, runtime, server),
+          body: Stack(
+            children: [
+              Column(
+                children: [
+                  // ── Video WebView ──────────────────────────────────
+                  AspectRatio(
+                    aspectRatio: 16 / 9,
+                    child: Stack(
+                      fit: StackFit.expand,
+                      children: [
+                        WebViewWidget(controller: _controller),
+                        if (_isLoading)
+                          _LoadingOverlay(serverLabel: server.label),
+                        if (_hasError && !_isLoading)
+                          _ErrorOverlay(
+                            onRetry: _reload,
+                            onNextServer: () => _switchServer(
+                              (_serverIndex + 1) % _servers.length,
+                            ),
+                          ),
+                        // Fullscreen button
+                        Positioned(
+                          bottom: 8,
+                          right: 8,
+                          child: GestureDetector(
+                            onTap: _enterLandscape,
+                            child: Container(
+                              width: 34,
+                              height: 34,
+                              decoration: BoxDecoration(
+                                color: Colors.black.withAlpha(140),
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              child: const Icon(
+                                Icons.fullscreen_rounded,
+                                color: Colors.white,
+                                size: 20,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+
+                  // ── Info + server panel ────────────────────────────
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          // Title + meta
+                          Text(
+                            title,
+                            style: GoogleFonts.outfit(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w800,
+                              color: Colors.white,
+                            ),
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              if (isTv && _season != null) ...[
+                                _MetaBadge(
+                                  label: 'S$_season E$_episode',
+                                  color: AppTheme.secondary,
+                                ),
+                                const SizedBox(width: 8),
+                              ],
+                              if (year.isNotEmpty) _MetaBadge(label: year),
+                              if (runtime.isNotEmpty) ...[
+                                const SizedBox(width: 8),
+                                _MetaBadge(label: runtime),
+                              ],
+                            ],
+                          ),
+                          const SizedBox(height: 18),
+
+                          // Server selector
+                          Row(
+                            children: [
+                              const Icon(
+                                Icons.dns_rounded,
+                                color: AppTheme.primary,
+                                size: 16,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Select Server',
+                                style: GoogleFonts.outfit(
+                                  fontSize: 14,
+                                  fontWeight: FontWeight.w700,
+                                  color: Colors.white,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 10),
+                          GridView.builder(
+                            shrinkWrap: true,
+                            physics: const NeverScrollableScrollPhysics(),
+                            gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                              crossAxisCount: 3,
+                              crossAxisSpacing: 8,
+                              mainAxisSpacing: 8,
+                              childAspectRatio: 2.8,
+                            ),
+                            itemCount: _servers.length,
+                            itemBuilder: (context, i) {
+                              final s = _servers[i];
+                              final isActive = i == _serverIndex;
+                              return GestureDetector(
+                                onTap: () => _switchServer(i),
+                                child: AnimatedContainer(
+                                  duration: const Duration(milliseconds: 200),
+                                  alignment: Alignment.center,
+                                  decoration: BoxDecoration(
+                                    color: isActive
+                                        ? AppTheme.primary.withAlpha(30)
+                                        : AppTheme.surfaceDark,
+                                    borderRadius: BorderRadius.circular(8),
+                                    border: Border.all(
+                                      color: isActive
+                                          ? AppTheme.primary
+                                          : const Color(0xFF2A2A3E),
+                                      width: isActive ? 1.5 : 1,
+                                    ),
+                                  ),
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    mainAxisAlignment: MainAxisAlignment.center,
+                                    children: [
+                                      Text(
+                                        s.icon,
+                                        style: const TextStyle(fontSize: 12),
+                                      ),
+                                      const SizedBox(width: 4),
+                                      Flexible(
+                                        child: Text(
+                                          s.label,
+                                          style: GoogleFonts.outfit(
+                                            fontSize: 11,
+                                            fontWeight: isActive
+                                                ? FontWeight.w700
+                                                : FontWeight.w500,
+                                            color: isActive
+                                                ? AppTheme.primary
+                                                : Colors.white,
+                                          ),
+                                          maxLines: 1,
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+
+              // ── Rotate-to-fullscreen nudge ─────────────────────
+              if (_nudgeShown) _RotateNudge(onTap: _enterLandscape),
+            ],
+          ),
+        );
+      },
+    );
   }
 
   void _showServerSheet(BuildContext context) {
@@ -1155,54 +1285,96 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
       context: context,
       backgroundColor: const Color(0xFF1E1E2E),
       shape: const RoundedRectangleBorder(
-          borderRadius: BorderRadius.vertical(top: Radius.circular(20))),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
       builder: (sheetCtx) => SafeArea(
-        child: Column(mainAxisSize: MainAxisSize.min, children: [
-          Container(width: 40, height: 4,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 40,
+              height: 4,
               margin: const EdgeInsets.symmetric(vertical: 10),
-              decoration: BoxDecoration(color: const Color(0xFF444466),
-                  borderRadius: BorderRadius.circular(2))),
-          Padding(
-            padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-            child: Row(children: [
-              const Icon(Icons.dns_rounded, color: AppTheme.primary, size: 18),
-              const SizedBox(width: 8),
-              Text('Select Server', style: GoogleFonts.outfit(
-                  fontSize: 16, fontWeight: FontWeight.w700, color: Colors.white)),
-            ]),
-          ),
-          ...List.generate(_servers.length, (i) {
-            final s        = _servers[i];
-            final isActive = i == _serverIndex;
-            return ListTile(
-              leading: Container(
-                width: 38, height: 38,
-                decoration: BoxDecoration(
-                  color: isActive
-                      ? AppTheme.primary.withAlpha(30)
-                      : AppTheme.surfaceVariantDark,
-                  borderRadius: BorderRadius.circular(10)),
-                child: Center(child: Text(s.icon,
-                    style: const TextStyle(fontSize: 18)))),
-              title: Text(s.label, style: GoogleFonts.outfit(
-                  color: isActive ? AppTheme.primary : Colors.white,
-                  fontWeight: isActive ? FontWeight.w700 : FontWeight.w500)),
-              trailing: isActive
-                  ? Container(width: 8, height: 8,
-                      decoration: BoxDecoration(
-                          color: AppTheme.primary, shape: BoxShape.circle))
-                  : null,
-              onTap: () { Navigator.pop(sheetCtx); _switchServer(i); },
-            );
-          }),
-          const SizedBox(height: 8),
-        ]),
+              decoration: BoxDecoration(
+                color: const Color(0xFF444466),
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+              child: Row(
+                children: [
+                  const Icon(
+                    Icons.dns_rounded,
+                    color: AppTheme.primary,
+                    size: 18,
+                  ),
+                  const SizedBox(width: 8),
+                  Text(
+                    'Select Server',
+                    style: GoogleFonts.outfit(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            ...List.generate(_servers.length, (i) {
+              final s = _servers[i];
+              final isActive = i == _serverIndex;
+              return ListTile(
+                leading: Container(
+                  width: 38,
+                  height: 38,
+                  decoration: BoxDecoration(
+                    color: isActive
+                        ? AppTheme.primary.withAlpha(30)
+                        : AppTheme.surfaceVariantDark,
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Center(
+                    child: Text(s.icon, style: const TextStyle(fontSize: 18)),
+                  ),
+                ),
+                title: Text(
+                  s.label,
+                  style: GoogleFonts.outfit(
+                    color: isActive ? AppTheme.primary : Colors.white,
+                    fontWeight: isActive ? FontWeight.w700 : FontWeight.w500,
+                  ),
+                ),
+                trailing: isActive
+                    ? Container(
+                        width: 8,
+                        height: 8,
+                        decoration: BoxDecoration(
+                          color: AppTheme.primary,
+                          shape: BoxShape.circle,
+                        ),
+                      )
+                    : null,
+                onTap: () {
+                  Navigator.pop(sheetCtx);
+                  _switchServer(i);
+                },
+              );
+            }),
+            const SizedBox(height: 8),
+          ],
+        ),
       ),
     );
   }
 
   PreferredSizeWidget _buildAppBar(
-    String title, bool isTv, String year, String runtime, VideoServer server) {
+    String title,
+    bool isTv,
+    String year,
+    String runtime,
+    VideoServer server,
+  ) {
     return AppBar(
       backgroundColor: Colors.black,
       elevation: 0,
@@ -1214,42 +1386,67 @@ class _MoviePlayerScreenState extends State<MoviePlayerScreen> {
             color: Colors.white.withAlpha(15),
             borderRadius: BorderRadius.circular(10),
           ),
-          child: const Icon(Icons.arrow_back_ios_new_rounded,
-              color: Colors.white, size: 16),
+          child: const Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: Colors.white,
+            size: 16,
+          ),
         ),
       ),
       title: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title,
-              style: GoogleFonts.outfit(
-                  fontSize: 14, fontWeight: FontWeight.w700,
-                  color: Colors.white),
-              maxLines: 1, overflow: TextOverflow.ellipsis),
-          Row(children: [
-            Text('${server.icon} ${server.label}',
+          Text(
+            title,
+            style: GoogleFonts.outfit(
+              fontSize: 14,
+              fontWeight: FontWeight.w700,
+              color: Colors.white,
+            ),
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+          ),
+          Row(
+            children: [
+              Text(
+                '${server.icon} ${server.label}',
                 style: GoogleFonts.outfit(
-                    fontSize: 10, color: AppTheme.primary,
-                    fontWeight: FontWeight.w600)),
-            if (_isLoading) ...[
-              const SizedBox(width: 6),
-              SizedBox(
-                width: 10, height: 10,
-                child: CircularProgressIndicator(
-                    color: AppTheme.primary, strokeWidth: 1.5),
+                  fontSize: 10,
+                  color: AppTheme.primary,
+                  fontWeight: FontWeight.w600,
+                ),
               ),
+              if (_isLoading) ...[
+                const SizedBox(width: 6),
+                SizedBox(
+                  width: 10,
+                  height: 10,
+                  child: CircularProgressIndicator(
+                    color: AppTheme.primary,
+                    strokeWidth: 1.5,
+                  ),
+                ),
+              ],
             ],
-          ]),
+          ),
         ],
       ),
       actions: [
         IconButton(
-          icon: const Icon(Icons.refresh_rounded, color: Colors.white, size: 20),
+          icon: const Icon(
+            Icons.refresh_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
           onPressed: _reload,
           padding: EdgeInsets.zero,
         ),
         IconButton(
-          icon: const Icon(Icons.more_vert_rounded, color: Colors.white, size: 20),
+          icon: const Icon(
+            Icons.more_vert_rounded,
+            color: Colors.white,
+            size: 20,
+          ),
           onPressed: () => showPlayerMoreSheet(context, widget.item),
           padding: const EdgeInsets.only(right: 8),
         ),
@@ -1267,15 +1464,19 @@ class _LoadingOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     color: Colors.black,
-    child: Center(child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        CircularProgressIndicator(color: AppTheme.primary, strokeWidth: 2),
-        const SizedBox(height: 12),
-        Text('Loading $serverLabel…',
-            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13)),
-      ],
-    )),
+    child: Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          CircularProgressIndicator(color: AppTheme.primary, strokeWidth: 2),
+          const SizedBox(height: 12),
+          Text(
+            'Loading $serverLabel…',
+            style: GoogleFonts.outfit(color: Colors.white70, fontSize: 13),
+          ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -1287,25 +1488,49 @@ class _ErrorOverlay extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
     color: Colors.black,
-    child: Center(child: Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const Icon(Icons.error_outline_rounded, color: Colors.white38, size: 48),
-        const SizedBox(height: 12),
-        Text('Failed to load player',
-            style: GoogleFonts.outfit(color: Colors.white, fontSize: 15,
-                fontWeight: FontWeight.w600)),
-        const SizedBox(height: 6),
-        Text('Try a different server',
-            style: GoogleFonts.outfit(color: Colors.white54, fontSize: 12)),
-        const SizedBox(height: 16),
-        Row(mainAxisAlignment: MainAxisAlignment.center, children: [
-          _PlayerBtn(label: 'Retry', icon: Icons.refresh_rounded, onTap: onRetry),
-          const SizedBox(width: 12),
-          _PlayerBtn(label: 'Next Server', icon: Icons.swap_horiz_rounded, onTap: onNextServer),
-        ]),
-      ],
-    )),
+    child: Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(
+            Icons.error_outline_rounded,
+            color: Colors.white38,
+            size: 48,
+          ),
+          const SizedBox(height: 12),
+          Text(
+            'Failed to load player',
+            style: GoogleFonts.outfit(
+              color: Colors.white,
+              fontSize: 15,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Try a different server',
+            style: GoogleFonts.outfit(color: Colors.white54, fontSize: 12),
+          ),
+          const SizedBox(height: 16),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              _PlayerBtn(
+                label: 'Retry',
+                icon: Icons.refresh_rounded,
+                onTap: onRetry,
+              ),
+              const SizedBox(width: 12),
+              _PlayerBtn(
+                label: 'Next Server',
+                icon: Icons.swap_horiz_rounded,
+                onTap: onNextServer,
+              ),
+            ],
+          ),
+        ],
+      ),
+    ),
   );
 }
 
@@ -1317,7 +1542,8 @@ class _RotateNudge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: 0, right: 0,
+      left: 0,
+      right: 0,
       // sits just below the 16:9 video area
       top: MediaQuery.of(context).size.width * 9 / 16 - 18,
       child: Center(
@@ -1329,21 +1555,35 @@ class _RotateNudge extends StatelessWidget {
               color: const Color(0xFF1E1E2E).withAlpha(230),
               borderRadius: BorderRadius.circular(20),
               border: Border.all(color: AppTheme.primary.withAlpha(100)),
-              boxShadow: [BoxShadow(
-                  color: Colors.black.withAlpha(80), blurRadius: 12)],
+              boxShadow: [
+                BoxShadow(color: Colors.black.withAlpha(80), blurRadius: 12),
+              ],
             ),
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(Icons.screen_rotation_rounded,
-                  color: AppTheme.primary, size: 14),
-              const SizedBox(width: 6),
-              Text('Rotate for fullscreen',
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                const Icon(
+                  Icons.screen_rotation_rounded,
+                  color: AppTheme.primary,
+                  size: 14,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  'Rotate for fullscreen',
                   style: GoogleFonts.outfit(
-                      fontSize: 12, fontWeight: FontWeight.w600,
-                      color: Colors.white)),
-              const SizedBox(width: 6),
-              const Icon(Icons.fullscreen_rounded,
-                  color: AppTheme.primary, size: 14),
-            ]),
+                    fontSize: 12,
+                    fontWeight: FontWeight.w600,
+                    color: Colors.white,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                const Icon(
+                  Icons.fullscreen_rounded,
+                  color: AppTheme.primary,
+                  size: 14,
+                ),
+              ],
+            ),
           ),
         ),
       ),
@@ -1355,7 +1595,7 @@ class _RotateNudge extends StatelessWidget {
 
 class _MetaBadge extends StatelessWidget {
   final String label;
-  final Color  color;
+  final Color color;
   const _MetaBadge({required this.label, this.color = const Color(0xFF444466)});
 
   @override
@@ -1366,8 +1606,14 @@ class _MetaBadge extends StatelessWidget {
       borderRadius: BorderRadius.circular(6),
       border: Border.all(color: color.withAlpha(80)),
     ),
-    child: Text(label, style: GoogleFonts.outfit(
-        fontSize: 11, color: color, fontWeight: FontWeight.w600)),
+    child: Text(
+      label,
+      style: GoogleFonts.outfit(
+        fontSize: 11,
+        color: color,
+        fontWeight: FontWeight.w600,
+      ),
+    ),
   );
 }
 
@@ -1375,7 +1621,11 @@ class _PlayerBtn extends StatelessWidget {
   final String label;
   final IconData icon;
   final VoidCallback onTap;
-  const _PlayerBtn({required this.label, required this.icon, required this.onTap});
+  const _PlayerBtn({
+    required this.label,
+    required this.icon,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -1387,21 +1637,34 @@ class _PlayerBtn extends StatelessWidget {
         borderRadius: BorderRadius.circular(10),
         border: Border.all(color: AppTheme.primary.withAlpha(80)),
       ),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
-        Icon(icon, color: AppTheme.primary, size: 16),
-        const SizedBox(width: 6),
-        Text(label, style: GoogleFonts.outfit(
-            color: AppTheme.primary, fontWeight: FontWeight.w600, fontSize: 13)),
-      ]),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: AppTheme.primary, size: 16),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              color: AppTheme.primary,
+              fontWeight: FontWeight.w600,
+              fontSize: 13,
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }
 
 class _ActionTile extends StatelessWidget {
   final IconData icon;
-  final String   label;
+  final String label;
   final VoidCallback onTap;
-  const _ActionTile({required this.icon, required this.label, required this.onTap});
+  const _ActionTile({
+    required this.icon,
+    required this.label,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) => GestureDetector(
@@ -1413,12 +1676,20 @@ class _ActionTile extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: const Color(0xFF2A2A3E)),
       ),
-      child: Column(mainAxisAlignment: MainAxisAlignment.center, children: [
-        Icon(icon, color: const Color(0xFF888899), size: 20),
-        const SizedBox(height: 5),
-        Text(label, style: GoogleFonts.outfit(
-            fontSize: 11, color: const Color(0xFF888899))),
-      ]),
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(icon, color: const Color(0xFF888899), size: 20),
+          const SizedBox(height: 5),
+          Text(
+            label,
+            style: GoogleFonts.outfit(
+              fontSize: 11,
+              color: const Color(0xFF888899),
+            ),
+          ),
+        ],
+      ),
     ),
   );
 }

@@ -1,8 +1,11 @@
 import 'dart:io' show Platform;
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, kReleaseMode;
 
 class AppConfig {
   static String get backendBaseUrl {
+    if (kReleaseMode) {
+      return 'https://moviebox.nazaarabox.com';
+    }
     if (kIsWeb) {
       return 'http://localhost:8000';
     }

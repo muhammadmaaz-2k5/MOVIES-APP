@@ -29,12 +29,26 @@ dependencies:
   share_plus: ^10.0.2
   youtube_player_iframe: ^6.0.2
   webview_flutter: ^4.10.0
+  firebase_core: ^4.11.0
+  firebase_messaging: ^16.4.1
 
 
 dev_dependencies:
   flutter_test:    # CRITICAL: Required for Flutter project testing - DO NOT REMOVE
     sdk: flutter   # CRITICAL: Required for Flutter project testing - DO NOT REMOVE
   flutter_lints: ^5.0.0 # CRITICAL: Required for code quality - DO NOT REMOVE
+  flutter_launcher_icons: ^0.13.1
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/app_icon.png
+
+flutter_launcher_icons:
+  android: true
+  ios: true
+  macos:
+    generate: true
+  web:
+    generate: true
+  image_path: "assets/app_icon.png"
